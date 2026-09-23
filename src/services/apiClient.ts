@@ -5,8 +5,8 @@
 import { storageService, STORE_KEYS } from './storageService';
 
 function resolveApiUrl(): string {
-  // Explicit VITE_API_URL always wins — required for any production build
-  // (no dev server, so there's no proxy to fall back on).
+  // Explicit VITE_API_URL always wins — required for a production build
+  // hosted anywhere that doesn't proxy /api (Vercel does, via vercel.json).
   const explicit = import.meta.env.VITE_API_URL as string | undefined;
   if (explicit) return explicit;
 

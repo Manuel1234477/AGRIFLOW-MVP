@@ -52,9 +52,17 @@ async function main() {
   const supplier = await req('/auth/register', { method: 'POST', body: JSON.stringify({ name: 'Test Supplier', email: `supplier-${RUN_ID}@test.agriflow`, password: 'testpass123', role: 'supplier' }) });
   check('register supplier -> 200', supplier.status === 200, `got ${supplier.status}`);
 
-  const admin = await req('/auth/register', { method: 'POST', body: JSON.stringify({ name: 'Test Admin', email: `admin-${RUN_ID}@test.agriflow`, password: 'testpass123', role: 'admin' }) });
-  check('register admin -> 200', admin.status === 200, `got ${admin.status}`);
-  check('register endpoint allows self-service admin creation (known risk — see report)', admin.body?.user?.role === 'admin');
+  const adminBody = JSON.stringify({ name: 'Test Admin', email: `admin-${RUN_ID}@test.agriflow`, password: 'testpass123', role: 'admin' });
+  const selfAdmin = await req('/auth/register', { method: 'POST', body: adminBody });
+  check('register admin without key -> 403', selfAdmin.status === 403, `got ${selfAdmin.status}`);
+  const wrongKeyAdmin = await req('/auth/register', { method: 'POST', headers: { 'X-Admin-Registration-Key': 'wrong-key' }, body: adminBody });
+  check('register admin with wrong key -> 403', wrongKeyAdmin.status === 403, `got ${wrongKeyAdmin.status}`);
+
+  // The rest of the run needs an admin, so the API's key must be provided.
+  const adminKey = process.env.ADMIN_REGISTRATION_KEY;
+  if (!adminKey) throw new Error('set ADMIN_REGISTRATION_KEY to the API\'s value to run the admin checks');
+  const admin = await req('/auth/register', { method: 'POST', headers: { 'X-Admin-Registration-Key': adminKey }, body: adminBody });
+  check('register admin with key -> 200', admin.status === 200 && admin.body?.user?.role === 'admin', `got ${admin.status}`);
 
   const dupe = await req('/auth/register', { method: 'POST', body: JSON.stringify({ name: 'Dupe', email: buyer.body.user.email, password: 'testpass123', role: 'buyer' }) });
   check('register duplicate email -> 409', dupe.status === 409, `got ${dupe.status}`);

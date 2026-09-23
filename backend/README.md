@@ -67,7 +67,7 @@ All routes are under `/api`.
 
 | Method | Path                          | Auth           | Notes |
 |--------|-------------------------------|----------------|-------|
-| POST   | `/auth/register`              | —              | Any role |
+| POST   | `/auth/register`              | —              | buyer / supplier / logistics; `admin` needs the `X-Admin-Registration-Key` header. Sends a welcome email |
 | POST   | `/auth/login`                 | —              | |
 | GET    | `/auth/me`                    | any            | |
 | GET    | `/listings`                   | —              | `?commodity=&status=` (default `status=active`) |
@@ -103,6 +103,20 @@ All routes are under `/api`.
 
 See `.env.example`. `JWT_SECRET` must be changed before any real deployment
 — the example value is a placeholder.
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `DATABASE_URL` | yes | Postgres connection string |
+| `JWT_SECRET` | yes | Signs auth tokens |
+| `JWT_EXPIRY_HOURS` | no (24) | Token lifetime |
+| `PORT` / `SERVER_ADDR` | no | Bind address; `PORT` (set by Railway) wins |
+| `ADMIN_REGISTRATION_KEY` | no | Registering `role: admin` requires sending this value as the `X-Admin-Registration-Key` header. Unset → no admin can register. The seed and integration-test scripts read it from the same env var name |
+| `RESEND_API_KEY` | no | [Resend](https://resend.com) key for the welcome email sent on registration. Unset → emails are skipped (logged) |
+| `EMAIL_FROM` | no | Sender address. Defaults to Resend's test sender `onboarding@resend.dev`, which only delivers to the Resend account owner — verify a domain in Resend and set this before sending to real users |
+
+Welcome emails are sent in the background after the account is created, so
+an email failure never fails a registration — check the logs for
+`email provider rejected send` or `email send failed`.
 
 ## Live deployment
 

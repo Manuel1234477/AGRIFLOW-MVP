@@ -5,8 +5,12 @@
 // Usage:
 //   node scripts/seed-backend.mjs                       # seeds http://localhost:8080/api
 //   API_URL=https://agriflow-api-production.up.railway.app/api node scripts/seed-backend.mjs
+//
+// Creating the admin account needs ADMIN_REGISTRATION_KEY set to the same
+// value the API runs with (see backend/.env.example).
 
 const API_URL = process.env.API_URL ?? 'http://localhost:8080/api';
+const ADMIN_KEY = process.env.ADMIN_REGISTRATION_KEY;
 const PASSWORD = 'agriflow123';
 
 const USERS = [
@@ -41,8 +45,10 @@ async function api(path, options = {}) {
 }
 
 async function registerOrLogin(user) {
+  // Admins can only be registered with the server's ADMIN_REGISTRATION_KEY.
+  const headers = user.role === 'admin' && ADMIN_KEY ? { 'X-Admin-Registration-Key': ADMIN_KEY } : {};
   try {
-    const resp = await api('/auth/register', { method: 'POST', body: JSON.stringify({ ...user, password: PASSWORD }) });
+    const resp = await api('/auth/register', { method: 'POST', headers, body: JSON.stringify({ ...user, password: PASSWORD }) });
     console.log(`  created ${user.role.padEnd(10)} ${user.email}`);
     return resp;
   } catch (err) {

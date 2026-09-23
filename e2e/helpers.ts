@@ -10,10 +10,13 @@ export interface TestUser {
 }
 
 /** Registers a user directly against the API — used for admin, since the
- * register UI deliberately doesn't offer an admin role option. */
+ * register UI deliberately doesn't offer an admin role option. Admin
+ * registration needs ADMIN_REGISTRATION_KEY to match the API's. */
 export async function registerViaApi(request: APIRequestContext, user: TestUser) {
+  const adminKey = process.env.ADMIN_REGISTRATION_KEY;
   const res = await request.post(`${API_URL}/auth/register`, {
     data: { name: user.name, email: user.email, password: user.password, role: user.role },
+    headers: user.role === 'admin' && adminKey ? { 'X-Admin-Registration-Key': adminKey } : {},
   });
   if (!res.ok()) throw new Error(`register ${user.email} failed: ${res.status()} ${await res.text()}`);
   return res.json();

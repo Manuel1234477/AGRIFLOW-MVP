@@ -1,5 +1,6 @@
 mod auth;
 mod config;
+mod email;
 mod error;
 mod ids;
 mod models;
@@ -28,7 +29,8 @@ async fn main() -> anyhow::Result<()> {
     sqlx::migrate!("./migrations").run(&db).await?;
 
     let addr = config.server_addr;
-    let state = AppState { db, config };
+    let mailer = email::Mailer::new(config.resend_api_key.clone(), config.email_from.clone());
+    let state = AppState { db, config, mailer };
     let app = routes::build(state);
 
     tracing::info!("agriflow-api listening on {addr}");

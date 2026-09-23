@@ -119,6 +119,8 @@ All data models and state progressions are persisted locally in `localStorage` u
 
 > **Note on Routing**: The repository includes [`vercel.json`](./vercel.json) with SPA catch-all rewrites (`/(.*) -> /index.html`), ensuring all subroutes (e.g. `/app/dashboard`, `/app/transactions/:id`, `/app/matches`) work on direct page reloads.
 
+> **Note on the API**: `vercel.json` also proxies `/api/*` to the live Railway backend (`https://agriflow-api-production.up.railway.app/api/*`), ahead of the SPA catch-all. The frontend calls `/api` on its own domain, so no `VITE_API_URL` needs to be set in Vercel and no cross-origin requests are made. Setting `VITE_API_URL` still overrides this.
+
 ### Option 2: Deploy via Vercel CLI
 ```bash
 # 1. Install CLI

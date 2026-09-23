@@ -1,17 +1,34 @@
-use axum::{Json, extract::State};
+use axum::{Json, extract::State, http::HeaderMap};
 
 use crate::auth::{AuthUser, jwt::issue_token, password::{hash_password, verify_password}};
 use crate::error::{AppError, AppResult};
 use crate::ids;
-use crate::models::user::{AuthResponse, LoginRequest, RegisterRequest, User, UserPublic};
+use crate::models::user::{AuthResponse, LoginRequest, RegisterRequest, User, UserPublic, UserRole};
 use crate::state::AppState;
+
+const ADMIN_KEY_HEADER: &str = "x-admin-registration-key";
 
 pub async fn register(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(body): Json<RegisterRequest>,
 ) -> AppResult<Json<AuthResponse>> {
     if body.name.trim().is_empty() || body.email.trim().is_empty() {
         return Err(AppError::BadRequest("Name and email are required.".into()));
+    }
+    // Admins can't sign themselves up: registering one requires the
+    // server-side ADMIN_REGISTRATION_KEY (used by seed scripts and tests).
+    if body.role == UserRole::Admin {
+        let presented = headers.get(ADMIN_KEY_HEADER).and_then(|v| v.to_str().ok());
+        let authorized = match (&state.config.admin_registration_key, presented) {
+            (Some(expected), Some(presented)) => constant_time_eq(expected, presented),
+            _ => false,
+        };
+        if !authorized {
+            return Err(AppError::Forbidden(
+                "Admin accounts can't be self-registered.".into(),
+            ));
+        }
     }
     if body.password.len() < 6 {
         return Err(AppError::BadRequest(
@@ -63,10 +80,18 @@ pub async fn register(
         &user.email,
     )?;
 
+    state.mailer.send_welcome(&user.email, &user.name, user.role);
+
     Ok(Json(AuthResponse {
         token,
         user: UserPublic::from(user),
     }))
+}
+
+/// Compares secrets without short-circuiting on the first differing byte,
+/// so response timing doesn't leak how much of the key a guess got right.
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 pub async fn login(

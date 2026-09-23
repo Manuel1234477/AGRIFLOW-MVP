@@ -140,19 +140,40 @@ real, hosted backend, not a local-only project:
 
 ### Redeploying
 
-This was deployed via the Railway CLI directly from this directory, **not**
-via a GitHub-connected auto-deploy — so pushing to `main` will not trigger a
-new deployment. To ship a change:
+Deploys are automatic — merging a PR into this repo's `main` ships the
+backend, with no manual `railway up`. The chain:
+
+1. A PR is merged into `reactjay/AGRIFLOW-MVP` `main`.
+2. The fork `Manuel1234477/AGRIFLOW-MVP` pulls it in within ~15 minutes via
+   a scheduled GitHub Action on the fork (`.github/workflows/sync-upstream.yml`,
+   which calls GitHub's merge-upstream API). It can also be run on demand
+   from the fork's Actions tab, or with **Sync fork** on GitHub.
+3. The `agriflow-api` Railway service is connected to the fork's `main`
+   with **Root Directory** `/backend`, so every sync triggers a build of
+   `backend/Dockerfile` and a deploy.
+
+Railway deploys from the fork rather than this repo because installing
+Railway's GitHub app here needs owner access to this repo.
+
+Things that can break the chain:
+
+- **The sync fails if an upstream change touches `.github/workflows/`** —
+  the Action's `GITHUB_TOKEN` isn't allowed to push workflow files. Click
+  **Sync fork** on the fork's GitHub page once to get past it.
+- **GitHub disables scheduled workflows after 60 days of repo inactivity.**
+  If deploys stop, check the fork's Actions tab first.
+- **A failing Docker build keeps the previous deployment live** — the most
+  likely cause is a stale `.sqlx/` cache (see above). Check the build logs
+  in the Railway dashboard.
+
+To deploy a local, unmerged change by hand (e.g. to test a hotfix), the CLI
+still works — the next GitHub-triggered deploy will replace it:
 
 ```bash
 cd backend
 railway link -p renewed-nurturing -s agriflow-api -e production   # first time only
 railway up -s agriflow-api -e production
 ```
-
-(Wiring up GitHub-triggered auto-deploys instead is a reasonable follow-up —
-`railway service source connect --repo <owner>/<repo> --branch main --service agriflow-api`
-— but wasn't set up here.)
 
 ## Handoff: what's next
 

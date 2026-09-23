@@ -1,0 +1,30 @@
+# Keeps this fork's main in step with reactjay/AGRIFLOW-MVP's main.
+#
+# Railway's agriflow-api service deploys from this fork's main (root
+# directory: backend/), so every PR merged upstream reaches Railway within
+# ~15 minutes with no manual `railway up`.
+name: Sync fork from upstream
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'Manuel1234477/AGRIFLOW-MVP'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge upstream main into fork main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method POST "repos/${{ github.repository }}/merge-upstream" \
+            -f branch=main

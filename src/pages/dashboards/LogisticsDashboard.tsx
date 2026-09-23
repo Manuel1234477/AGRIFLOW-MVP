@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Truck, ClipboardList, CheckCircle2, Package, MapPin } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -6,6 +7,7 @@ import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { formatCurrency, formatDate, formatCommodity } from '../../utils/format';
+import { EscrowEarningsCard } from '../../components/wallet/EscrowEarningsCard';
 import type { LogisticsJob } from '../../types';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -22,6 +24,7 @@ const STATUS_COLORS: Record<string, string> = {
 export function LogisticsDashboard() {
   const { session } = useApp();
   const navigate = useNavigate();
+  const [, setTick] = useState(0);
   if (!session) return null;
 
   const myJobs = logisticsService.getForProvider(session.userId);
@@ -41,6 +44,14 @@ export function LogisticsDashboard() {
           All Jobs
         </Button>
       </div>
+
+      {/* Escrow Earnings & Withdrawal Payouts */}
+      <EscrowEarningsCard
+        userId={session.userId}
+        userName={session.name}
+        userRole="logistics"
+        onUpdated={() => setTick((t) => t + 1)}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">

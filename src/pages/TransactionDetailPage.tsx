@@ -19,7 +19,7 @@ import { Modal } from '../components/ui/Modal';
 import { Input, Textarea } from '../components/ui/Input';
 import { formatCurrency, formatDate, formatDateTime, formatCommodity, COMMODITY_ICONS } from '../utils/format';
 import { CONTRACT_ID } from '../lib/stellar';
-import type { Transaction, Payment, LogisticsJob, AuditEvent } from '../types';
+import type { Transaction, TransactionStatus, Payment, LogisticsJob, AuditEvent } from '../types';
 
 export function TransactionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -35,27 +35,53 @@ export function TransactionDetailPage() {
   const [showPayModal, setShowPayModal] = useState(false);
   const [disputeForm, setDisputeForm] = useState({ reason: '', description: '' });
   const [payProcessing, setPayProcessing] = useState(false);
-  const [notFound, setNotFound] = useState(false);
 
   const refresh = async () => {
     if (!id) return;
-    const t = await transactionService.getById(id);
-    setTxn(t);
+    let t = await transactionService.fetchById(id);
     if (t) {
-      setPayment(paymentService.getForTransaction(t.id));
-      setJob(logisticsService.getForTransaction(t.id));
+      const p = paymentService.getForTransaction(t.id);
+      const j = logisticsService.getForTransaction(t.id);
+
+      // Auto-synchronize transaction state if logistics job is further ahead
+      if (j) {
+        const logisticsToTxnStatus: Record<string, TransactionStatus> = {
+          COMPLETED: 'COMPLETED',
+          DELIVERED: 'DELIVERED',
+          IN_TRANSIT: 'IN_TRANSIT',
+          PICKED_UP: 'PICKED_UP',
+          READY_FOR_PICKUP: 'READY_FOR_PICKUP',
+          ACCEPTED: 'LOGISTICS_ACCEPTED',
+          ASSIGNED: 'LOGISTICS_ASSIGNED',
+        };
+        const mappedStatus = logisticsToTxnStatus[j.status];
+        if (mappedStatus && t.status !== mappedStatus && getPipelineIndex(mappedStatus) > getPipelineIndex(t.status)) {
+          try {
+            t = await transactionService.transition({
+              transactionId: t.id,
+              to: mappedStatus,
+              actorId: j.providerId || session?.userId || 'system',
+              actorName: j.providerName || session?.name || 'Logistics Provider',
+              actorRole: 'logistics',
+              note: `Synchronized with shipment status: ${j.status}`,
+            });
+          } catch {
+            // fallback gracefully
+          }
+        }
+      }
+
+      setTxn(t);
+      setPayment(p);
+      setJob(j);
       setAudit(auditService.getForTransaction(t.id));
-    } else {
-      setNotFound(true);
     }
   };
 
   useEffect(() => { refresh(); }, [id]);
 
   if (!txn || !session) return (
-    <div className="p-6 flex items-center justify-center text-gray-500">
-      {notFound ? 'Transaction not found.' : 'Loading transaction...'}
-    </div>
+    <div className="p-6 flex items-center justify-center text-gray-500">Transaction not found.</div>
   );
 
   const role = session.role;
@@ -73,7 +99,7 @@ export function TransactionDetailPage() {
       });
       toast('success', 'Transaction accepted.');
       refreshNotifications();
-      await refresh();
+      refresh();
     } catch (e: any) { toast('error', e.message); }
     finally { setLoading(false); }
   };
@@ -87,7 +113,7 @@ export function TransactionDetailPage() {
       });
       toast('info', 'Transaction rejected.');
       refreshNotifications();
-      await refresh();
+      refresh();
     } catch (e: any) { toast('error', e.message); }
     finally { setLoading(false); }
   };
@@ -102,7 +128,7 @@ export function TransactionDetailPage() {
         amount: txn.totalAmount, currency: txn.currency,
       });
       toast('info', 'Processing payment...');
-      await refresh();
+      refresh();
       if (simulate === 'success') {
         await paymentService.confirm(p.id, session.userId, session.name);
         toast('success', 'Payment confirmed! Logistics job created.');
@@ -111,29 +137,30 @@ export function TransactionDetailPage() {
         toast('error', 'Payment failed: Insufficient funds (simulated).');
       }
       refreshNotifications();
-      await refresh();
+      refresh();
     } catch (e: any) { toast('error', e.message); }
     finally { setPayProcessing(false); }
   };
 
   const handleConfirmDelivery = async () => {
-    if (txn.status !== 'DELIVERED') {
+    if (txn.status === 'COMPLETED') {
+      toast('info', 'This transaction is already completed.');
+      return;
+    }
+    if (txn.status !== 'DELIVERED' && txn.status !== 'BUYER_CONFIRMATION_PENDING') {
       toast('error', 'Delivery cannot be confirmed yet. The logistics provider must first mark the shipment as delivered.');
       return;
     }
     setLoading(true);
     try {
       await transactionService.transition({
-        transactionId: txn.id, to: 'DELIVERY_CONFIRMED',
-        actorId: session.userId, actorName: session.name, actorRole: 'buyer',
-      });
-      await transactionService.transition({
         transactionId: txn.id, to: 'COMPLETED',
-        actorId: 'system', actorName: 'AgriFlow System', actorRole: 'system',
+        actorId: session.userId, actorName: session.name, actorRole: 'buyer',
+        note: 'Buyer confirmed receipt and completed the transaction.',
       });
       toast('success', 'Delivery confirmed! Transaction completed.');
       refreshNotifications();
-      await refresh();
+      refresh();
     } catch (e: any) { toast('error', e.message); }
     finally { setLoading(false); }
   };
@@ -149,7 +176,7 @@ export function TransactionDetailPage() {
       toast('warning', 'Dispute raised. Our team will review shortly.');
       setShowDisputeModal(false);
       refreshNotifications();
-      await refresh();
+      refresh();
     } catch (e: any) { toast('error', e.message); }
     finally { setLoading(false); }
   };

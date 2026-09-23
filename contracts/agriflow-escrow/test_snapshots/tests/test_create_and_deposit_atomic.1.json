@@ -80,10 +80,10 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
-              "function_name": "create_trade",
+              "function_name": "create_and_deposit",
               "args": [
                 {
-                  "bytes": "54584e2d34383231000000000000000000000000000000000000000000000000"
+                  "bytes": "54584e2d41544f4d494300000000000000000000000000000000000000000000"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
@@ -99,25 +99,6 @@
                 },
                 {
                   "i128": "100000000"
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
-              "function_name": "deposit",
-              "args": [
-                {
-                  "bytes": "54584e2d34383231000000000000000000000000000000000000000000000000"
                 }
               ]
             }
@@ -158,7 +139,7 @@
               "function_name": "release",
               "args": [
                 {
-                  "bytes": "54584e2d34383231000000000000000000000000000000000000000000000000"
+                  "bytes": "54584e2d41544f4d494300000000000000000000000000000000000000000000"
                 }
               ]
             }
@@ -290,26 +271,6 @@
               "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
               "key": {
                 "ledger_key_nonce": {
-                  "nonce": "4270020994084947596"
-                }
-              },
-              "durability": "temporary",
-              "val": "void"
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 6311999
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-              "key": {
-                "ledger_key_nonce": {
                   "nonce": "4837995959683129791"
                 }
               },
@@ -334,7 +295,7 @@
                     "symbol": "Trade"
                   },
                   {
-                    "bytes": "54584e2d34383231000000000000000000000000000000000000000000000000"
+                    "bytes": "54584e2d41544f4d494300000000000000000000000000000000000000000000"
                   }
                 ]
               },

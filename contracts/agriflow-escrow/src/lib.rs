@@ -52,7 +52,7 @@ impl AgriFlowEscrow {
         env.storage().instance().set(&DataKey::Treasury, &treasury);
     }
 
-    /// Admin creates an escrow trade record before the buyer deposits
+    /// Admin or Buyer creates an escrow trade record before deposit
     pub fn create_trade(
         env: Env,
         tx_id:            BytesN<32>,
@@ -62,8 +62,7 @@ impl AgriFlowEscrow {
         goods_amount:     i128,
         logistics_amount: i128,
     ) {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
-        admin.require_auth();
+        buyer.require_auth();
 
         let key = DataKey::Trade(tx_id.clone());
         assert!(env.storage().persistent().get::<_, Trade>(&key).is_none(), "Trade exists");
@@ -77,6 +76,39 @@ impl AgriFlowEscrow {
             logistics_amount,
             platform_fee: fee,
             status: Status::None,
+        });
+    }
+
+    /// Atomically create trade and deposit USDC into escrow in a single transaction
+    pub fn create_and_deposit(
+        env: Env,
+        tx_id:            BytesN<32>,
+        buyer:            Address,
+        supplier:         Address,
+        logistics:        Address,
+        goods_amount:     i128,
+        logistics_amount: i128,
+    ) {
+        buyer.require_auth();
+
+        let key = DataKey::Trade(tx_id.clone());
+        assert!(env.storage().persistent().get::<_, Trade>(&key).is_none(), "Trade exists");
+
+        let fee = goods_amount / 100; // 1% platform fee
+        let total = goods_amount + logistics_amount + fee;
+        let token: Address = env.storage().instance().get(&DataKey::Token).unwrap();
+
+        token::Client::new(&env, &token)
+            .transfer(&buyer, &env.current_contract_address(), &total);
+
+        env.storage().persistent().set(&key, &Trade {
+            buyer,
+            supplier,
+            logistics,
+            goods_amount,
+            logistics_amount,
+            platform_fee: fee,
+            status: Status::Funded,
         });
     }
 
@@ -224,13 +256,27 @@ mod tests {
     }
 
     #[test]
+    fn test_create_and_deposit_atomic() {
+        let (env, escrow, _admin, buyer, supplier, logistics, _treasury, token) = setup();
+        let tx_id = make_tx_id(&env, "TXN-ATOMIC");
+
+        escrow.create_and_deposit(&tx_id, &buyer, &supplier, &logistics, &100_0000000, &10_0000000);
+
+        let trade = escrow.get_trade(&tx_id).unwrap();
+        assert_eq!(trade.status, Status::Funded);
+
+        escrow.release(&tx_id);
+        assert_eq!(token.balance(&supplier), 100_0000000);
+        assert_eq!(token.balance(&logistics), 10_0000000);
+    }
+
+    #[test]
     fn test_dispute_and_refund() {
         let (env, escrow, _admin, buyer, supplier, logistics, _treasury, token) = setup();
         let tx_id = make_tx_id(&env, "TXN-DISPUTE");
         let buyer_balance_before = token.balance(&buyer);
 
-        escrow.create_trade(&tx_id, &buyer, &supplier, &logistics, &100_0000000, &10_0000000);
-        escrow.deposit(&tx_id);
+        escrow.create_and_deposit(&tx_id, &buyer, &supplier, &logistics, &100_0000000, &10_0000000);
         escrow.raise_dispute(&tx_id, &buyer);
         escrow.refund(&tx_id);
 
@@ -242,8 +288,7 @@ mod tests {
     fn test_double_deposit_fails() {
         let (env, escrow, _, buyer, supplier, logistics, _, _) = setup();
         let tx_id = make_tx_id(&env, "TXN-DBL");
-        escrow.create_trade(&tx_id, &buyer, &supplier, &logistics, &100_0000000, &10_0000000);
-        escrow.deposit(&tx_id);
-        escrow.deposit(&tx_id); // panics
+        escrow.create_and_deposit(&tx_id, &buyer, &supplier, &logistics, &100_0000000, &10_0000000);
+        escrow.deposit(&tx_id); // panics: Already funded
     }
 }

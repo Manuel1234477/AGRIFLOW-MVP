@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { transactionService } from '../../services/transactionService';
 import { logisticsService } from '../../services/logisticsService';
 import { disputeService } from '../../services/disputeService';
+import { storageService, STORE_KEYS } from '../../services/storageService';
 import { resetPlatformData } from '../../services/seedService';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent } from '../../components/ui/Card';
@@ -12,7 +13,7 @@ import { Modal } from '../../components/ui/Modal';
 import { useToast } from '../../components/ui/Toast';
 import { formatCurrency, formatCommodity } from '../../utils/format';
 import { useState, useEffect } from 'react';
-import type { Transaction } from '../../types';
+import type { User, Transaction } from '../../types';
 
 export function AdminDashboard() {
   const { session, refreshNotifications } = useApp();
@@ -21,26 +22,32 @@ export function AdminDashboard() {
   const [showReset, setShowReset] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [allTxns, setAllTxns] = useState<Transaction[]>([]);
+  const [_loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!session) return;
-    let cancelled = false;
-    transactionService.getAll().then((t) => { if (!cancelled) setAllTxns(t); });
-    return () => { cancelled = true; };
-  }, [session]);
+    let isMounted = true;
+    async function load() {
+      setLoading(true);
+      try {
+        const txs = await transactionService.fetchAll();
+        if (isMounted) setAllTxns(txs);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    load();
+    return () => { isMounted = false; };
+  }, []);
 
   if (!session) return null;
 
-  // The backend has no endpoint to list users yet (only auth/register,
-  // auth/login, auth/me) — per-role user counts aren't available until one
-  // is added, so this section is left at 0 rather than faked from stale data.
-  const buyers = 0;
-  const suppliers = 0;
-  const logistics = 0;
-  const totalUsers = 0;
+  const allUsers = storageService.get<User[]>(STORE_KEYS.USERS) ?? [];
   const allJobs = logisticsService.getAll();
   const disputes = disputeService.getOpen();
 
+  const buyers = allUsers.filter((u) => u.role === 'buyer').length;
+  const suppliers = allUsers.filter((u) => u.role === 'supplier').length;
+  const logistics = allUsers.filter((u) => u.role === 'logistics').length;
   const pendingLogistics = allJobs.filter((j) => j.status === 'PENDING').length;
   const activeShipments = allJobs.filter((j) => ['ACCEPTED','READY_FOR_PICKUP','PICKED_UP','IN_TRANSIT'].includes(j.status)).length;
   const completed = allTxns.filter((t) => t.status === 'COMPLETED').length;
@@ -62,7 +69,7 @@ export function AdminDashboard() {
     refreshNotifications();
     setResetting(false);
     setShowReset(false);
-    toast('success', 'Local demo data cleared.');
+    toast('success', 'Platform data reset to default state.');
     navigate('/app/dashboard');
   };
 
@@ -109,7 +116,7 @@ export function AdminDashboard() {
       {/* Stats grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
-          { label: 'Total Users', value: totalUsers, icon: <Users className="w-4 h-4" />, color: 'bg-gray-50 border-gray-200 text-gray-900', path: '/app/admin/users' },
+          { label: 'Total Users', value: allUsers.length, icon: <Users className="w-4 h-4" />, color: 'bg-gray-50 border-gray-200 text-gray-900', path: '/app/admin/users' },
           { label: 'Active Suppliers', value: suppliers, icon: <Users className="w-4 h-4" />, color: 'bg-agri-50 border-agri-200 text-agri-900', path: '/app/admin/users' },
           { label: 'Active Buyers', value: buyers, icon: <Users className="w-4 h-4" />, color: 'bg-blue-50 border-blue-200 text-blue-900', path: '/app/admin/users' },
           { label: 'Logistics Providers', value: logistics, icon: <Truck className="w-4 h-4" />, color: 'bg-violet-50 border-violet-200 text-violet-900', path: '/app/admin/users' },
@@ -180,13 +187,13 @@ export function AdminDashboard() {
       </Card>
 
       {/* Reset modal */}
-      <Modal open={showReset} onClose={() => setShowReset(false)} title="Clear Local Demo Data">
+      <Modal open={showReset} onClose={() => setShowReset(false)} title="Reset Platform Data">
         <div className="space-y-4">
           <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg">
-            <p className="text-sm text-amber-800 font-medium">This clears locally-stored demo data only.</p>
-            <p className="text-xs text-amber-700 mt-1">Payments, logistics jobs, disputes, notifications and the audit log are cleared from this browser. Users, listings, demands and transactions live on the server and are not affected.</p>
+            <p className="text-sm text-amber-800 font-medium">This will restore the initial platform data state.</p>
+            <p className="text-xs text-amber-700 mt-1">All current transactions, payments, and logistics will be reset to default sample records.</p>
           </div>
-          <p className="text-sm text-gray-600">Are you sure you want to clear local demo data?</p>
+          <p className="text-sm text-gray-600">Are you sure you want to reset the platform data?</p>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setShowReset(false)}>Cancel</Button>
             <Button variant="danger" loading={resetting} onClick={doReset} icon={<RotateCcw className="w-4 h-4" />}>

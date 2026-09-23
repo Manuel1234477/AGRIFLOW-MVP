@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../components/ui/Toast';
 import { AgriFlowLogo } from '../components/ui/AgriFlowLogo';
+import { LanguageSwitcher } from '../components/ui/LanguageSwitcher';
 import type { UserRole } from '../types';
 
 export function RegisterPage() {
@@ -55,9 +56,10 @@ export function RegisterPage() {
     <div className="min-h-screen bg-[#f4f5f6] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 sm:px-10 border border-gray-200 rounded-xl shadow-xs">
-          {/* Brand Logo */}
-          <div className="mb-6">
+          {/* Brand Logo & Language switcher */}
+          <div className="mb-6 flex items-center justify-between border-b border-gray-100 pb-5">
             <AgriFlowLogo size="md" />
+            <LanguageSwitcher />
           </div>
 
           {step === 1 ? (
@@ -152,7 +154,7 @@ export function RegisterPage() {
 
                 <button
                   type="submit"
-                  className="w-full mt-4 bg-agri-700 hover:bg-agri-800 text-white font-medium py-2.5 px-4 rounded-lg text-sm transition-colors shadow-xs"
+                  className="w-full mt-4 bg-agri-700 hover:bg-agri-800 text-white font-medium py-2.5 px-4 rounded-lg text-sm transition-colors shadow-xs cursor-pointer"
                 >
                   Continue
                 </button>

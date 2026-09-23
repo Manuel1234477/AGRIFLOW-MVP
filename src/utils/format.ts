@@ -2,7 +2,14 @@ export function formatCurrency(amount: number, currency = 'NGN'): string {
   if (currency === 'NGN') {
     return `₦${amount.toLocaleString('en-NG')}`;
   }
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
+  if (currency === 'USDC' || currency === 'XLM') {
+    return `${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+  }
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
+  } catch {
+    return `${amount.toLocaleString('en-US')} ${currency}`;
+  }
 }
 
 export function formatDate(iso: string): string {

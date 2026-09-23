@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Package, Clock, CheckCircle2, ArrowRightLeft, Truck } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -9,7 +9,8 @@ import { Card, CardContent } from '../../components/ui/Card';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { formatCurrency, formatCommodity } from '../../utils/format';
-import type { SupplyListing, Transaction } from '../../types';
+import { EscrowEarningsCard } from '../../components/wallet/EscrowEarningsCard';
+import type { Transaction, SupplyListing } from '../../types';
 
 function StatCard({ label, value, icon, color }: { label: string; value: number; icon: React.ReactNode; color: string }) {
   return (
@@ -28,17 +29,26 @@ export function SupplierDashboard() {
   const navigate = useNavigate();
   const [listings, setListings] = useState<SupplyListing[]>([]);
   const [allTxns, setAllTxns] = useState<Transaction[]>([]);
+  const [_loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!session) return;
+    setLoading(true);
+    try {
+      const [liveListings, liveTxns] = await Promise.all([
+        supplyService.fetchMine(),
+        transactionService.fetchMine(),
+      ]);
+      setListings(liveListings);
+      setAllTxns(liveTxns);
+    } finally {
+      setLoading(false);
+    }
+  }, [session]);
 
   useEffect(() => {
-    if (!session) return;
-    let cancelled = false;
-    Promise.all([supplyService.getForSupplier(), transactionService.getForSupplier()]).then(([l, t]) => {
-      if (cancelled) return;
-      setListings(l);
-      setAllTxns(t);
-    });
-    return () => { cancelled = true; };
-  }, [session]);
+    load();
+  }, [load]);
 
   if (!session) return null;
 
@@ -62,6 +72,14 @@ export function SupplierDashboard() {
           Create Supply Listing
         </Button>
       </div>
+
+      {/* Escrow Earnings & Withdrawal Payouts */}
+      <EscrowEarningsCard
+        userId={session.userId}
+        userName={session.name}
+        userRole="supplier"
+        onUpdated={load}
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
         <StatCard label="Active Listings" value={activeListings} icon={<Package className="w-4 h-4" />} color="bg-agri-50 border-agri-200 text-agri-900" />

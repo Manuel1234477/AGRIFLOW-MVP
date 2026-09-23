@@ -7,18 +7,18 @@ const TRANSITIONS: Record<TransactionStatus, TransactionStatus[]> = {
   ACCEPTED: ['PAYMENT_PENDING', 'CANCELLED'],
   REJECTED: [],
   PAYMENT_PENDING: ['PAYMENT_CONFIRMED', 'PAYMENT_FAILED', 'PAYMENT_CANCELLED'],
-  PAYMENT_CONFIRMED: ['LOGISTICS_PENDING', 'LOGISTICS_ASSIGNED', 'LOGISTICS_ACCEPTED', 'READY_FOR_PICKUP'],
+  PAYMENT_CONFIRMED: ['LOGISTICS_PENDING', 'LOGISTICS_ASSIGNED', 'LOGISTICS_ACCEPTED', 'READY_FOR_PICKUP', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'],
   PAYMENT_FAILED: ['PAYMENT_PENDING', 'CANCELLED'],
   PAYMENT_CANCELLED: ['CANCELLED'],
-  LOGISTICS_PENDING: ['LOGISTICS_ASSIGNED', 'LOGISTICS_ACCEPTED', 'READY_FOR_PICKUP'],
-  LOGISTICS_ASSIGNED: ['LOGISTICS_ACCEPTED', 'LOGISTICS_REJECTED', 'READY_FOR_PICKUP'],
-  LOGISTICS_ACCEPTED: ['READY_FOR_PICKUP', 'PICKED_UP'],
+  LOGISTICS_PENDING: ['LOGISTICS_ASSIGNED', 'LOGISTICS_ACCEPTED', 'READY_FOR_PICKUP', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'],
+  LOGISTICS_ASSIGNED: ['LOGISTICS_ACCEPTED', 'LOGISTICS_REJECTED', 'READY_FOR_PICKUP', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'],
+  LOGISTICS_ACCEPTED: ['READY_FOR_PICKUP', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'],
   LOGISTICS_REJECTED: ['LOGISTICS_PENDING'],
-  READY_FOR_PICKUP: ['PICKED_UP', 'IN_TRANSIT'],
-  PICKED_UP: ['IN_TRANSIT', 'DELIVERED'],
-  IN_TRANSIT: ['DELIVERED', 'BUYER_CONFIRMATION_PENDING', 'DELIVERY_FAILED'],
+  READY_FOR_PICKUP: ['PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'],
+  PICKED_UP: ['IN_TRANSIT', 'DELIVERED', 'COMPLETED'],
+  IN_TRANSIT: ['DELIVERED', 'BUYER_CONFIRMATION_PENDING', 'DELIVERY_CONFIRMED', 'COMPLETED', 'DELIVERY_FAILED'],
   DELIVERED: ['BUYER_CONFIRMATION_PENDING', 'DELIVERY_CONFIRMED', 'COMPLETED', 'DISPUTED'],
-  BUYER_CONFIRMATION_PENDING: ['COMPLETED', 'DISPUTED'],
+  BUYER_CONFIRMATION_PENDING: ['DELIVERY_CONFIRMED', 'COMPLETED', 'DISPUTED'],
   DELIVERY_CONFIRMED: ['COMPLETED'],
   DELIVERY_FAILED: ['DISPUTED'],
   COMPLETED: [],
@@ -31,30 +31,34 @@ const ALLOWED_ACTORS: Partial<Record<TransactionStatus, Array<UserRole | 'system
   PENDING_SUPPLIER_ACCEPTANCE: ['buyer', 'system'],
   ACCEPTED: ['supplier'],
   REJECTED: ['supplier'],
-  PAYMENT_PENDING: ['buyer'],
-  PAYMENT_CONFIRMED: ['system'],
-  PAYMENT_FAILED: ['system'],
-  PAYMENT_CANCELLED: ['buyer'],
-  LOGISTICS_PENDING: ['system'],
-  LOGISTICS_ASSIGNED: ['admin'],
-  LOGISTICS_ACCEPTED: ['logistics'],
-  LOGISTICS_REJECTED: ['logistics'],
-  READY_FOR_PICKUP: ['logistics'],
-  PICKED_UP: ['logistics'],
-  IN_TRANSIT: ['logistics'],
-  DELIVERED: ['logistics'],
-  BUYER_CONFIRMATION_PENDING: ['logistics', 'system'],
-  DELIVERY_CONFIRMED: ['buyer'],
-  DELIVERY_FAILED: ['buyer', 'logistics'],
-  COMPLETED: ['buyer', 'system'],
+  PAYMENT_PENDING: ['buyer', 'system'],
+  PAYMENT_CONFIRMED: ['buyer', 'system', 'admin'],
+  PAYMENT_FAILED: ['buyer', 'system'],
+  PAYMENT_CANCELLED: ['buyer', 'system'],
+  LOGISTICS_PENDING: ['buyer', 'system', 'admin'],
+  LOGISTICS_ASSIGNED: ['admin', 'system', 'logistics'],
+  LOGISTICS_ACCEPTED: ['logistics', 'system', 'admin'],
+  LOGISTICS_REJECTED: ['logistics', 'system', 'admin'],
+  READY_FOR_PICKUP: ['logistics', 'system', 'admin'],
+  PICKED_UP: ['logistics', 'system', 'admin'],
+  IN_TRANSIT: ['logistics', 'system', 'admin'],
+  DELIVERED: ['logistics', 'system', 'admin'],
+  BUYER_CONFIRMATION_PENDING: ['logistics', 'system', 'admin'],
+  DELIVERY_CONFIRMED: ['buyer', 'system', 'admin'],
+  DELIVERY_FAILED: ['buyer', 'logistics', 'admin'],
+  COMPLETED: ['buyer', 'system', 'admin', 'logistics', 'supplier'],
   CANCELLED: ['buyer', 'supplier', 'admin'],
   DISPUTED: ['buyer'],
 };
 
 export function canTransition(from: TransactionStatus, to: TransactionStatus): boolean {
   if (from === to) return true;
+  // Completing a transaction from any active in-transit / delivery / confirmed state is always allowed
+  if (to === 'COMPLETED' && !['REJECTED', 'CANCELLED'].includes(from)) return true;
   // If already at or beyond ACCEPTED, supplier accepting is idempotent
   if (to === 'ACCEPTED' && (from === 'PAYMENT_PENDING' || from === 'PAYMENT_CONFIRMED')) return true;
+  // If already completed or confirmed, confirming delivery / completing is idempotent
+  if ((from === 'COMPLETED' || from === 'DELIVERY_CONFIRMED') && (to === 'DELIVERY_CONFIRMED' || to === 'COMPLETED')) return true;
   return TRANSITIONS[from]?.includes(to) ?? false;
 }
 
@@ -123,13 +127,13 @@ export function getStatusColor(status: TransactionStatus): string {
     PAYMENT_CONFIRMED: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     PAYMENT_FAILED: 'bg-red-100 text-red-800 border-red-200',
     PAYMENT_CANCELLED: 'bg-gray-100 text-gray-800 border-gray-200',
-    LOGISTICS_PENDING: 'bg-gray-100 text-gray-800 border-gray-200',
-    LOGISTICS_ASSIGNED: 'bg-gray-100 text-gray-800 border-gray-200',
+    LOGISTICS_PENDING: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    LOGISTICS_ASSIGNED: 'bg-indigo-100 text-indigo-800 border-indigo-200',
     LOGISTICS_ACCEPTED: 'bg-blue-100 text-blue-800 border-blue-200',
     LOGISTICS_REJECTED: 'bg-red-100 text-red-800 border-red-200',
     READY_FOR_PICKUP: 'bg-cyan-100 text-cyan-800 border-cyan-200',
     PICKED_UP: 'bg-sky-100 text-sky-800 border-sky-200',
-    IN_TRANSIT: 'bg-blue-100 text-blue-800 border-blue-200',
+    IN_TRANSIT: 'bg-violet-100 text-violet-800 border-violet-200',
     DELIVERED: 'bg-purple-100 text-purple-800 border-purple-200',
     BUYER_CONFIRMATION_PENDING: 'bg-purple-100 text-purple-800 border-purple-200',
     DELIVERY_CONFIRMED: 'bg-green-100 text-green-800 border-green-200',
@@ -144,7 +148,7 @@ export function getStatusColor(status: TransactionStatus): string {
 export const TRANSACTION_PIPELINE: TransactionStatus[] = [
   'PENDING',
   'ACCEPTED',
-  'PAYMENT_PENDING',
+  'PAYMENT_CONFIRMED',
   'LOGISTICS_ASSIGNED',
   'IN_TRANSIT',
   'DELIVERED',
@@ -159,9 +163,9 @@ export function getPipelineIndex(status: TransactionStatus): number {
     case 'ACCEPTED':
       return 1;
     case 'PAYMENT_PENDING':
+      return 2;
     case 'PAYMENT_CONFIRMED':
     case 'LOGISTICS_PENDING':
-      return 2;
     case 'LOGISTICS_ASSIGNED':
     case 'LOGISTICS_ACCEPTED':
     case 'READY_FOR_PICKUP':

@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import type { AuthSession, Notification, UserRole } from '../types';
 import { authService } from '../services/authService';
 import { notificationService } from '../services/notificationService';
-import { clearBackendOwnedLocalData } from '../services/seedService';
 
 interface RegisterParams {
   name: string;
@@ -31,10 +30,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [session, setSessionState] = useState<AuthSession | null>(() => authService.getSession());
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // Users, listings, demands and transactions now live on the backend —
-  // clear any stale copies left over from the old localStorage-only build.
+  // Validate token and sync live session on mount
   useEffect(() => {
-    clearBackendOwnedLocalData();
+    authService.fetchMe().then((user) => {
+      if (user) {
+        setSessionState({
+          userId: user.id,
+          role: user.role,
+          name: user.name,
+          email: user.email,
+        });
+      }
+    });
   }, []);
 
   const refreshNotifications = useCallback(() => {

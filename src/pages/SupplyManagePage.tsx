@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Package, Power } from 'lucide-react';
 import { supplyService } from '../services/supplyService';
@@ -9,7 +9,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Card } from '../components/ui/Card';
 import { VerifiedBadge } from '../components/ui/VerifiedBadge';
 import { formatCurrency, formatDate, formatCommodity, COMMODITY_ICONS } from '../utils/format';
-import type { ListingStatus, SupplyListing } from '../types';
+import type { SupplyListing } from '../types';
 
 export function SupplyManagePage() {
   const { session } = useApp();
@@ -17,30 +17,36 @@ export function SupplyManagePage() {
   const { toast } = useToast();
   const [toggling, setToggling] = useState<string | null>(null);
   const [listings, setListings] = useState<SupplyListing[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setListings(await supplyService.getForSupplier());
-    } catch (e: any) { toast('error', e.message); }
-    finally { setLoading(false); }
-  }, [toast]);
+  useEffect(() => {
+    if (!session) return;
+    let isMounted = true;
+    async function load() {
+      setLoading(true);
+      try {
+        const live = await supplyService.fetchMine();
+        if (isMounted) setListings(live);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    load();
+    return () => { isMounted = false; };
+  }, [session]);
 
-  useEffect(() => { load(); }, [load]);
+  if (!session) return null;
 
-  const toggleStatus = async (listingId: string, current: ListingStatus) => {
+  const toggleStatus = async (listingId: string, current: string) => {
     setToggling(listingId);
     try {
-      const newStatus: ListingStatus = current === 'active' ? 'inactive' : 'active';
-      await supplyService.setStatus(listingId, newStatus);
+      const newStatus = current === 'active' ? 'inactive' : 'active';
+      await supplyService.setStatus(listingId, session.userId, newStatus as any);
       toast('success', `Listing ${newStatus === 'active' ? 'activated' : 'deactivated'}.`);
-      await load();
+      window.location.reload();
     } catch (e: any) { toast('error', e.message); }
     finally { setToggling(null); }
   };
-
-  if (!session) return null;
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -54,9 +60,7 @@ export function SupplyManagePage() {
         </Button>
       </div>
 
-      {loading ? (
-        <div className="text-sm text-gray-500 py-12 text-center">Loading listings...</div>
-      ) : listings.length === 0 ? (
+      {listings.length === 0 ? (
         <EmptyState
           icon={<Package className="w-7 h-7" />}
           title="No supply listings"

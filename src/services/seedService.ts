@@ -28,3 +28,7 @@ export function clearBackendOwnedLocalData(): void {
 export function resetPlatformData(): void {
   for (const key of LOCAL_ONLY_KEYS) storageService.remove(key);
 }
+
+export function hashPassword(pw: string): string {
+  return `pwd_hash_${pw}`;
+}

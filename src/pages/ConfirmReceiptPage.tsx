@@ -1,16 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, ExternalLink, Loader2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../components/ui/Toast';
 import { FreighterBanner } from '../components/ui/FreighterBanner';
 import { transactionService } from '../services/transactionService';
+import { logisticsService } from '../services/logisticsService';
+import { formatCommodity, formatCurrency } from '../utils/format';
+import type { Transaction } from '../types';
 import {
   connectWallet,
   getWalletKey,
-  invokeContract,
+  releaseEscrowOnChain,
   stellarExpertLink,
-  txIdToScVal,
 } from '../lib/stellar';
 
 export function ConfirmReceiptPage() {
@@ -19,6 +21,7 @@ export function ConfirmReceiptPage() {
   const { session } = useApp();
   const { toast } = useToast();
 
+  const [tx, setTx] = useState<Transaction | null>(null);
   const [qtyChecked, setQtyChecked] = useState(true);
   const [qualityChecked, setQualityChecked] = useState(true);
   const [undamagedChecked, setUndamagedChecked] = useState(true);
@@ -27,19 +30,33 @@ export function ConfirmReceiptPage() {
   const [isReleasing, setIsReleasing] = useState(false);
   const [releaseError, setReleaseError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!id) return;
+    const targetId = id;
+    let isMounted = true;
+    async function load() {
+      const t = await transactionService.fetchById(targetId);
+      if (isMounted && t) {
+        setTx(t);
+        if (t.status === 'COMPLETED') setCompleted(true);
+      }
+    }
+    load();
+    return () => { isMounted = false; };
+  }, [id]);
+
   const canConfirm = qtyChecked && qualityChecked && undamagedChecked;
 
   const handleConfirmRelease = async () => {
-    if (!session || !canConfirm) return;
-    const txId = id || 'TXN-4821';
+    if (!session || !canConfirm || !tx) return;
+    const txId = tx.id;
     setReleaseError(null);
     setIsReleasing(true);
     try {
       let pubKey = await getWalletKey();
       if (!pubKey) pubKey = await connectWallet();
 
-      const txIdVal = await txIdToScVal(txId);
-      const hash = await invokeContract('release', [txIdVal], pubKey);
+      const hash = await releaseEscrowOnChain({ txId, buyerPublicKey: pubKey });
       setReleaseTxHash(hash);
 
       await transactionService.transition({
@@ -48,13 +65,24 @@ export function ConfirmReceiptPage() {
         actorId: session.userId,
         actorName: session.name,
         actorRole: 'buyer',
-        note: 'Buyer confirmed receipt. On-chain escrow released on Stellar.',
+        note: `Buyer confirmed receipt. Escrow funds released. Tx: ${hash}`,
       });
+
+      // Synchronize logistics job status
+      const job = logisticsService.getForTransaction(txId) || (tx.logisticsJobId ? logisticsService.getById(tx.logisticsJobId) : null);
+      if (job) {
+        await logisticsService.updateJobStatus({
+          jobId: job.id,
+          status: 'COMPLETED',
+          providerId: job.providerId || session.userId,
+          providerName: job.providerName || session.name,
+        }).catch(() => {});
+      }
+
       setCompleted(true);
-      toast('success', `Receipt confirmed! Escrow released on-chain. Hash: ${hash.slice(0, 8)}…`);
-      setTimeout(() => {
-        navigate('/app/dashboard');
-      }, 2000);
+      const updatedTx = await transactionService.fetchById(txId);
+      if (updatedTx) setTx(updatedTx);
+      toast('success', `Receipt confirmed! Escrow funds released and transaction completed.`);
     } catch (err: unknown) {
       setReleaseError(err instanceof Error ? err.message : 'Escrow release failed. Please try again.');
     } finally {
@@ -78,13 +106,25 @@ export function ConfirmReceiptPage() {
         </div>
       )}
 
+      {completed && (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl border bg-green-50 border-green-200 text-green-900">
+          <CheckCircle2 className="w-5 h-5 mt-0.5 text-green-700 shrink-0" />
+          <div className="text-xs space-y-0.5">
+            <p className="font-semibold text-green-900 text-sm">Receipt Confirmed & Escrow Released</p>
+            <p className="text-green-800">
+              This transaction is completed. Escrow funds have been successfully released to the supplier and carrier.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Back Link */}
       <div>
         <Link
-          to="/app/deliveries"
+          to={`/app/transactions/${tx?.id || id || ''}`}
           className="text-xs font-medium text-gray-500 hover:text-gray-900 inline-flex items-center gap-1"
         >
-          ← Back to Delivery Tracking
+          ← Back to Transaction Details
         </Link>
       </div>
 
@@ -93,12 +133,12 @@ export function ConfirmReceiptPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Confirm receipt</h1>
           <p className="text-xs text-gray-500 mt-1">
-            {id || 'TXN-4821'} · Delivered 31 Aug 2026, 15:47 by SwiftHaul Logistics
+            {tx ? `${tx.id} · ${formatCommodity(tx.commodity)} · Supplier: ${tx.supplierName}` : (id || 'TXN-AGF')}
           </p>
         </div>
         <div>
-          <span className="status-pill status-pill-purple">
-            {completed ? 'COMPLETED' : 'BUYER_CONFIRMATION_PENDING'}
+          <span className={`status-pill ${completed ? 'status-pill-green' : 'status-pill-purple'}`}>
+            {completed ? 'COMPLETED' : (tx?.status || 'BUYER_CONFIRMATION_PENDING')}
           </span>
         </div>
       </div>
@@ -124,19 +164,19 @@ export function ConfirmReceiptPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
               <div>
                 <div className="text-gray-500">Commodity</div>
-                <div className="font-semibold text-gray-900 mt-0.5">White Maize · Grade A</div>
+                <div className="font-semibold text-gray-900 mt-0.5">{tx ? `${formatCommodity(tx.commodity)} · Grade ${tx.qualityGrade}` : 'Maize'}</div>
               </div>
               <div>
                 <div className="text-gray-500">Quantity ordered</div>
-                <div className="font-semibold text-gray-900 mt-0.5">12 tonnes</div>
+                <div className="font-semibold text-gray-900 mt-0.5">{tx ? `${tx.quantity} ${tx.unit}` : '12 tonnes'}</div>
               </div>
               <div>
                 <div className="text-gray-500">Quantity delivered</div>
-                <div className="font-semibold text-gray-900 mt-0.5">12 tonnes</div>
+                <div className="font-semibold text-gray-900 mt-0.5">{tx ? `${tx.quantity} ${tx.unit}` : '12 tonnes'}</div>
               </div>
               <div>
-                <div className="text-gray-500">Delivered by</div>
-                <div className="font-semibold text-gray-900 mt-0.5">SwiftHaul · LAG-448-XA</div>
+                <div className="text-gray-500">Delivery Location</div>
+                <div className="font-semibold text-gray-900 mt-0.5">{tx ? tx.deliveryLocation : 'Lagos, Nigeria'}</div>
               </div>
             </div>
 
@@ -223,19 +263,19 @@ export function ConfirmReceiptPage() {
             <div className="space-y-2 text-xs">
               <div className="flex justify-between text-gray-600">
                 <span>Held in Soroban escrow</span>
-                <span className="font-medium text-gray-900">₦6,002,600 (USDC)</span>
+                <span className="font-medium text-gray-900">{formatCurrency(tx ? tx.totalAmount + Math.round(tx.totalAmount * 0.03) : 0, tx?.currency)} (USDC)</span>
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>Released to supplier</span>
-                <span className="font-medium text-gray-900">₦5,760,000 (USDC)</span>
+                <span className="font-medium text-gray-900">{formatCurrency(tx ? tx.totalAmount : 0, tx?.currency)} (USDC)</span>
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>Released to logistics</span>
-                <span className="font-medium text-gray-900">₦185,000 (USDC)</span>
+                <span className="font-medium text-gray-900">{formatCurrency(tx ? Math.round(tx.totalAmount * 0.03) : 0, tx?.currency)} (USDC)</span>
               </div>
               <div className="flex justify-between text-sm font-bold text-gray-900 pt-3 border-t border-gray-100">
                 <span>Total released</span>
-                <span>₦5,945,000 (USDC)</span>
+                <span>{formatCurrency(tx ? tx.totalAmount + Math.round(tx.totalAmount * 0.03) : 0, tx?.currency)} (USDC)</span>
               </div>
             </div>
 
@@ -252,9 +292,9 @@ export function ConfirmReceiptPage() {
                     Releasing Escrow on Chain...
                   </>
                 ) : completed ? (
-                  'Receipt Confirmed'
+                  '✓ Receipt Confirmed & Escrow Released'
                 ) : (
-                  'Confirm receipt'
+                  'Confirm receipt & Release Escrow'
                 )}
               </button>
               {releaseTxHash && (

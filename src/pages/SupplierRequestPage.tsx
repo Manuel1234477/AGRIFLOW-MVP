@@ -24,7 +24,7 @@ export function SupplierRequestPage() {
       if (id) {
         current = await transactionService.getById(id);
       } else {
-        const allSupplierTxns = await transactionService.getForSupplier();
+        const allSupplierTxns = await transactionService.getForSupplier(session.userId);
         current = allSupplierTxns.find((t) => t.status === 'PENDING' || t.status === 'PENDING_SUPPLIER_ACCEPTANCE') || allSupplierTxns[0] || null;
       }
       if (cancelled) return;

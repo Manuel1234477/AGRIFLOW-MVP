@@ -2,14 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { LogOut, Bell, ChevronDown } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { useLanguage } from '../../context/LanguageContext';
 import { AgriFlowLogo } from '../ui/AgriFlowLogo';
-import { LanguageToggle } from '../ui/LanguageToggle';
+import { LanguageSwitcher } from '../ui/LanguageSwitcher';
 import type { UserRole } from '../../types';
-import type { TranslationKey } from '../../i18n/translations';
 
 interface NavItem {
-  labelKey: TranslationKey;
+  label: string;
   path: string;
 }
 
@@ -17,40 +15,42 @@ function getNavItems(role: UserRole): NavItem[] {
   switch (role) {
     case 'buyer':
       return [
-        { labelKey: 'nav.dashboard', path: '/app/dashboard' },
-        { labelKey: 'nav.demands', path: '/app/demands' },
-        { labelKey: 'nav.transactions', path: '/app/transactions' },
-        { labelKey: 'nav.deliveries', path: '/app/deliveries' },
+        { label: 'Dashboard', path: '/app/dashboard' },
+        { label: 'Demands', path: '/app/demands' },
+        { label: 'Matches', path: '/app/matches' },
+        { label: 'Transactions', path: '/app/transactions' },
+        { label: 'Deliveries', path: '/app/deliveries' },
       ];
     case 'supplier':
       return [
-        { labelKey: 'nav.dashboard', path: '/app/dashboard' },
-        { labelKey: 'nav.mySupply', path: '/app/supply/manage' },
-        { labelKey: 'nav.requests', path: '/app/requests' },
-        { labelKey: 'nav.activeOrders', path: '/app/transactions' },
-        { labelKey: 'nav.shipments', path: '/app/shipments' },
+        { label: 'Dashboard', path: '/app/dashboard' },
+        { label: 'My Supply', path: '/app/supply/manage' },
+        { label: 'Requests', path: '/app/requests' },
+        { label: 'Active Orders', path: '/app/transactions' },
+        { label: 'Fulfilment', path: '/app/shipments' },
       ];
     case 'logistics':
       return [
-        { labelKey: 'nav.dashboard', path: '/app/dashboard' },
-        { labelKey: 'nav.assignments', path: '/app/jobs' },
-        { labelKey: 'nav.activeDeliveries', path: '/app/shipments' },
-        { labelKey: 'nav.history', path: '/app/deliveries' },
-        { labelKey: 'nav.incidents', path: '/app/incidents' },
+        { label: 'Dashboard', path: '/app/dashboard' },
+        { label: 'Assignments', path: '/app/jobs' },
+        { label: 'Active Deliveries', path: '/app/shipments' },
+        { label: 'History', path: '/app/deliveries' },
+        { label: 'Incidents', path: '/app/incidents' },
       ];
     case 'admin':
       return [
-        { labelKey: 'nav.dashboard', path: '/app/dashboard' },
-        { labelKey: 'nav.transactions', path: '/app/admin/transactions' },
-        { labelKey: 'nav.jobs', path: '/app/admin/logistics' },
-        { labelKey: 'nav.incidents', path: '/app/admin/disputes' },
+        { label: 'Overview', path: '/app/dashboard' },
+        { label: 'Users', path: '/app/admin/users' },
+        { label: 'Transactions', path: '/app/admin/transactions' },
+        { label: 'Logistics Jobs', path: '/app/admin/logistics' },
+        { label: 'Disputes', path: '/app/admin/disputes' },
+        { label: 'Audit Trail', path: '/app/admin/audit' },
       ];
   }
 }
 
 export function Navbar() {
   const { session, logout, unreadCount } = useApp();
-  const { t } = useLanguage();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -112,25 +112,27 @@ export function Navbar() {
                   }`
                 }
               >
-                {t(item.labelKey)}
+                {item.label}
               </NavLink>
             ))}
           </nav>
 
           {/* Right: Notifications & User Menu */}
-          <div className="flex items-center gap-2">
-            <LanguageToggle />
-
-<NavLink
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:block">
+              <LanguageSwitcher />
+            </div>
+            <NavLink
               to="/app/notifications"
               className="relative p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-50"
-              title={t('nav.notifications')}
+              title="Notifications"
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-agri-600" />
               )}
             </NavLink>
+
 
             <div className="relative" ref={menuRef}>
               <button
@@ -164,7 +166,7 @@ export function Navbar() {
                       className="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
                     >
                       <LogOut className="w-3.5 h-3.5" />
-                      <span>{t('nav.signOut')}</span>
+                      <span>Sign out</span>
                     </button>
                   </div>
                 </div>
@@ -186,7 +188,7 @@ export function Navbar() {
               }`
             }
           >
-            {t(item.labelKey)}
+            {item.label}
           </NavLink>
         ))}
       </div>

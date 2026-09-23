@@ -36,6 +36,9 @@ export function CreateSupplyPage() {
     setLoading(true);
     try {
       const l = await supplyService.create({
+        supplierId: session.userId,
+        supplierName: session.name,
+        supplierVerified: true,
         commodity: form.commodity,
         quantity: Number(form.quantity),
         unit: form.unit,

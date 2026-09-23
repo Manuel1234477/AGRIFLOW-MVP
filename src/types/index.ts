@@ -56,6 +56,7 @@ export interface SupplyListing {
   location: string;
   availabilityDate: string;
   description: string;
+  photos?: string[];
   status: ListingStatus;
   createdAt: string;
   updatedAt: string;
@@ -299,6 +300,8 @@ export type AuditAction =
   | 'transaction_completed'
   | 'dispute_raised'
   | 'dispute_resolved'
+  | 'withdrawal_requested'
+  | 'withdrawal_processed'
   | 'data_reset';
 
 export interface AuditEvent {

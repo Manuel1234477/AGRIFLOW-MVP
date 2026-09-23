@@ -1,9 +1,66 @@
 import type { SupplyListing, ListingStatus, CommodityType, QualityGrade } from '../types';
-import { apiClient } from './apiClient';
-import { mapListing, type ApiSupplyListing } from './apiMappers';
+import { apiFetch } from '../lib/api';
+import { storageService, STORE_KEYS } from './storageService';
+import { auditService } from './auditService';
+
+function normalizeListing(raw: any): SupplyListing {
+  return {
+    id: raw.id,
+    supplierId: raw.supplierId || raw.supplier_id,
+    supplierName: raw.supplierName || raw.supplier_name || 'Supplier',
+    supplierVerified: raw.supplierVerified ?? raw.supplier_verified ?? true,
+    commodity: raw.commodity,
+    quantity: typeof raw.quantity === 'string' ? parseFloat(raw.quantity) : raw.quantity,
+    unit: raw.unit || 'tonnes',
+    qualityGrade: raw.qualityGrade || raw.quality_grade || 'A',
+    pricePerUnit: typeof raw.pricePerUnit === 'string' ? parseFloat(raw.pricePerUnit) : (raw.price_per_unit ? parseFloat(raw.price_per_unit) : raw.pricePerUnit || 0),
+    currency: raw.currency || 'NGN',
+    location: raw.location,
+    availabilityDate: raw.availabilityDate || raw.availability_date || new Date().toISOString(),
+    description: raw.description || '',
+    photos: raw.photos || undefined,
+    status: (raw.status || 'active').toLowerCase() as ListingStatus,
+    createdAt: raw.createdAt || raw.created_at || new Date().toISOString(),
+    updatedAt: raw.updatedAt || raw.updated_at || new Date().toISOString(),
+  };
+}
 
 export const supplyService = {
+  async fetchAll(): Promise<SupplyListing[]> {
+    try {
+      const data = await apiFetch<any[]>('/api/listings');
+      const normalized = data.map(normalizeListing);
+      return normalized;
+    } catch {
+      return this.getAll();
+    }
+  },
+
+  async fetchMine(): Promise<SupplyListing[]> {
+    try {
+      const data = await apiFetch<any[]>('/api/listings/mine');
+      const normalized = data.map(normalizeListing);
+      return normalized;
+    } catch {
+      const session = storageService.get<any>(STORE_KEYS.SESSION);
+      if (!session?.userId) return [];
+      return this.getForSupplier(session.userId);
+    }
+  },
+
+  async fetchById(id: string): Promise<SupplyListing | null> {
+    try {
+      const data = await apiFetch<any>(`/api/listings/${id}`);
+      return normalizeListing(data);
+    } catch {
+      return this.getById(id);
+    }
+  },
+
   async create(params: {
+    supplierId: string;
+    supplierName: string;
+    supplierVerified: boolean;
     commodity: CommodityType;
     quantity: number;
     unit: string;
@@ -13,40 +70,104 @@ export const supplyService = {
     location: string;
     availabilityDate: string;
     description: string;
+    photos?: string[];
   }): Promise<SupplyListing> {
-    const raw = await apiClient.post<ApiSupplyListing>('/listings', params);
-    return mapListing(raw);
-  },
-
-  async update(listingId: string, updates: Partial<Pick<SupplyListing, 'quantity' | 'pricePerUnit' | 'description' | 'status'>>): Promise<SupplyListing> {
-    const raw = await apiClient.patch<ApiSupplyListing>(`/listings/${listingId}`, updates);
-    return mapListing(raw);
-  },
-
-  async setStatus(listingId: string, status: ListingStatus): Promise<SupplyListing> {
-    return this.update(listingId, { status });
-  },
-
-  async getAll(): Promise<SupplyListing[]> {
-    const raw = await apiClient.get<ApiSupplyListing[]>('/listings', { status: 'active' });
-    return raw.map(mapListing);
-  },
-
-  async getActive(): Promise<SupplyListing[]> {
-    return this.getAll();
-  },
-
-  async getById(id: string): Promise<SupplyListing | null> {
     try {
-      const raw = await apiClient.get<ApiSupplyListing>(`/listings/${id}`);
-      return mapListing(raw);
-    } catch {
-      return null;
+      const data = await apiFetch<any>('/api/listings', {
+        method: 'POST',
+        body: JSON.stringify({
+          commodity: params.commodity,
+          quantity: params.quantity,
+          unit: params.unit,
+          qualityGrade: params.qualityGrade,
+          pricePerUnit: params.pricePerUnit,
+          currency: params.currency,
+          location: params.location,
+          availabilityDate: params.availabilityDate,
+          description: params.description,
+        }),
+      });
+
+      const listing = normalizeListing({ ...data, photos: params.photos });
+      const all = storageService.get<SupplyListing[]>(STORE_KEYS.LISTINGS) ?? [];
+      all.unshift(listing);
+      storageService.set(STORE_KEYS.LISTINGS, all);
+
+      auditService.log({
+        action: 'supply_created',
+        actorId: params.supplierId,
+        actorName: params.supplierName,
+        actorRole: 'supplier',
+        entityId: listing.id,
+        entityType: 'SupplyListing',
+        detail: `${params.quantity} ${params.unit} of ${params.commodity} listed at ₦${params.pricePerUnit.toLocaleString()}/${params.unit}.`,
+      });
+
+      return listing;
+    } catch (apiErr) {
+      const now = new Date().toISOString();
+      const n = String(Date.now()).slice(-5);
+      const listing: SupplyListing = {
+        id: `SUP-AGF-${n}`,
+        ...params,
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      };
+      const all = storageService.get<SupplyListing[]>(STORE_KEYS.LISTINGS) ?? [];
+      all.unshift(listing);
+      storageService.set(STORE_KEYS.LISTINGS, all);
+      return listing;
     }
   },
 
-  async getForSupplier(): Promise<SupplyListing[]> {
-    const raw = await apiClient.get<ApiSupplyListing[]>('/listings/mine');
-    return raw.map(mapListing);
+  async update(listingId: string, _supplierId: string, updates: Partial<SupplyListing>): Promise<SupplyListing> {
+    try {
+      const data = await apiFetch<any>(`/api/listings/${listingId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          quantity: updates.quantity,
+          pricePerUnit: updates.pricePerUnit,
+          description: updates.description,
+          status: updates.status,
+        }),
+      });
+
+      const updated = normalizeListing(data);
+      const all = storageService.get<SupplyListing[]>(STORE_KEYS.LISTINGS) ?? [];
+      const idx = all.findIndex((l) => l.id === listingId);
+      if (idx >= 0) all[idx] = updated;
+      storageService.set(STORE_KEYS.LISTINGS, all);
+      return updated;
+    } catch {
+      const all = storageService.get<SupplyListing[]>(STORE_KEYS.LISTINGS) ?? [];
+      const idx = all.findIndex((l) => l.id === listingId);
+      if (idx < 0) throw new Error('Listing not found.');
+      const updated = { ...all[idx], ...updates, updatedAt: new Date().toISOString() };
+      all[idx] = updated;
+      storageService.set(STORE_KEYS.LISTINGS, all);
+      return updated;
+    }
+  },
+
+  async setStatus(listingId: string, supplierId: string, status: ListingStatus): Promise<SupplyListing> {
+    return this.update(listingId, supplierId, { status });
+  },
+
+  getAll(): SupplyListing[] {
+    const raw = storageService.get<any[]>(STORE_KEYS.LISTINGS) ?? [];
+    return raw.map(normalizeListing);
+  },
+
+  getActive(): SupplyListing[] {
+    return this.getAll().filter((l) => l.status === 'active');
+  },
+
+  getById(id: string): SupplyListing | null {
+    return this.getAll().find((l) => l.id === id) ?? null;
+  },
+
+  getForSupplier(supplierId: string): SupplyListing[] {
+    return this.getAll().filter((l) => l.supplierId === supplierId);
   },
 };

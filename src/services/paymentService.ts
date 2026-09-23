@@ -3,7 +3,6 @@ import { storageService, STORE_KEYS } from './storageService';
 import { transactionService } from './transactionService';
 import { auditService } from './auditService';
 import { logisticsService } from './logisticsService';
-import { apiClient } from './apiClient';
 
 function generateId(transactionId: string): string {
   const n = transactionId.split('-').pop() ?? String(Date.now()).slice(-5);
@@ -26,24 +25,34 @@ export const paymentService = {
   }): Promise<Payment> {
     await delay(400);
 
-    // Idempotency: check no existing payment for this transaction
+    // Idempotency: check existing payment for this transaction
     const existing = this.getForTransaction(params.transactionId);
-    if (existing && existing.status === 'CONFIRMED') {
-      throw new Error('Payment has already been confirmed for this transaction.');
-    }
-    if (existing && existing.status === 'PENDING') {
-      return existing; // return existing pending
+    if (existing) {
+      if (existing.status === 'CONFIRMED') {
+        // Ensure underlying transaction status is synchronized
+        const txn = transactionService.getById(params.transactionId);
+        if (txn && (txn.status === 'PAYMENT_PENDING' || txn.status === 'ACCEPTED')) {
+          await this.confirm(existing.id);
+        }
+        return existing;
+      }
+      if (existing.status === 'PENDING') {
+        return existing;
+      }
     }
 
-    // Transition transaction to PAYMENT_PENDING
-    await transactionService.transition({
-      transactionId: params.transactionId,
-      to: 'PAYMENT_PENDING',
-      actorId: params.payerId,
-      actorName: params.payerName,
-      actorRole: 'buyer',
-      note: 'Buyer initiated payment.',
-    });
+    // Transition transaction to PAYMENT_PENDING if not already
+    const currentTxn = transactionService.getById(params.transactionId);
+    if (currentTxn && currentTxn.status === 'ACCEPTED') {
+      await transactionService.transition({
+        transactionId: params.transactionId,
+        to: 'PAYMENT_PENDING',
+        actorId: params.payerId,
+        actorName: params.payerName,
+        actorRole: 'buyer',
+        note: 'Buyer initiated payment.',
+      });
+    }
 
     const now = new Date().toISOString();
     const payment: Payment = {
@@ -73,41 +82,46 @@ export const paymentService = {
     all.push(payment);
     storageService.set(STORE_KEYS.PAYMENTS, all);
 
+    // Link payment to transaction
+    transactionService.updateField(params.transactionId, 'paymentId', payment.id);
+
     return payment;
   },
 
   async confirm(paymentId: string, _actorId?: string, _actorName?: string): Promise<Payment> {
-    await delay(1200); // simulate processing time
+    await delay(600); // simulated processing time
 
     const all = storageService.get<Payment[]>(STORE_KEYS.PAYMENTS) ?? [];
     const idx = all.findIndex((p) => p.id === paymentId);
     if (idx < 0) throw new Error('Payment not found.');
     const payment = all[idx];
 
-    // Idempotency: already confirmed
-    if (payment.status === 'CONFIRMED') return payment;
-
-    // PAYMENT_CONFIRMED and the follow-on LOGISTICS_PENDING transition are
-    // both gated to a system actor, which no real JWT role can present (see
-    // backend/src/routes/transactions.rs' mock_confirm_payment doc comment)
-    // — this dedicated endpoint is the one legitimate way to settle the
-    // mock escrow, scoped to exactly the buyer on this transaction.
-    await apiClient.post(`/transactions/${payment.transactionId}/payment/confirm`);
-
     const now = new Date().toISOString();
     const updated: Payment = {
       ...payment,
       status: 'CONFIRMED',
-      providerReference: generateProviderRef(),
+      providerReference: payment.providerReference || generateProviderRef(),
       updatedAt: now,
-      completedAt: now,
+      completedAt: payment.completedAt || now,
     };
     all[idx] = updated;
     storageService.set(STORE_KEYS.PAYMENTS, all);
 
-    // Auto-create the (local-only) logistics job — idempotent. The backend
-    // transaction is already at LOGISTICS_PENDING as of the call above.
-    await logisticsService.createJobForTransaction(payment.transactionId);
+    // Synchronize transaction state to PAYMENT_CONFIRMED & LOGISTICS_PENDING
+    const txn = transactionService.getById(payment.transactionId);
+    if (txn && (txn.status === 'PAYMENT_PENDING' || txn.status === 'ACCEPTED')) {
+      await transactionService.transition({
+        transactionId: payment.transactionId,
+        to: 'PAYMENT_CONFIRMED',
+        actorId: 'system',
+        actorName: 'AgriFlow System',
+        actorRole: 'system',
+        note: `Payment confirmed. Provider ref: ${updated.providerReference}`,
+      });
+
+      // Auto-create logistics job — idempotent
+      await logisticsService.createJobForTransaction(payment.transactionId);
+    }
 
     return updated;
   },
@@ -118,13 +132,19 @@ export const paymentService = {
     const idx = all.findIndex((p) => p.id === paymentId);
     if (idx < 0) throw new Error('Payment not found.');
     const payment = all[idx];
-
-    await apiClient.post(`/transactions/${payment.transactionId}/payment/fail`, { reason });
-
     const now = new Date().toISOString();
     const updated: Payment = { ...payment, status: 'FAILED', failureReason: reason, updatedAt: now };
     all[idx] = updated;
     storageService.set(STORE_KEYS.PAYMENTS, all);
+
+    await transactionService.transition({
+      transactionId: payment.transactionId,
+      to: 'PAYMENT_FAILED',
+      actorId: 'system',
+      actorName: 'AgriFlow System',
+      actorRole: 'system',
+      note: `Payment failed: ${reason}`,
+    });
 
     return updated;
   },

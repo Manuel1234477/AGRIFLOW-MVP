@@ -8,8 +8,29 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* Hide Google Translate top banner */
+    .goog-te-banner-frame,
+    .goog-te-balloon-frame,
+    #goog-gt-tt,
+    .goog-tooltip,
+    .goog-tooltip:hover { display: none !important; }
+    body { top: 0 !important; position: static !important; }
+    .skiptranslate { display: none !important; }
+  </style>
   </head>
   <body class="bg-gray-100/60 text-gray-900 antialiased min-h-screen">
+    <div id="google_translate_element" style="display:none"></div>
+    <script>
+      function googleTranslateElementInit() {
+        new window.google.translate.TranslateElement({
+          pageLanguage: 'en',
+          includedLanguages: 'fr,ar,sw,yo,ha,ig,pt,es,zh-TW,hi',
+          autoDisplay: false,
+        }, 'google_translate_element');
+      }
+    </script>
+    <script src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

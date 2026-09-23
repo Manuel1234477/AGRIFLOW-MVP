@@ -11,10 +11,12 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-"@stellar/freighter-api": "^6.0.1",
+    "@stellar/freighter-api": "^6.0.1",
     "@stellar/stellar-sdk": "^17.1.0",
+    "@types/leaflet": "^1.9.22",
     "@types/react-router-dom": "^5.3.3",
     "buffer": "^6.0.3",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.34.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

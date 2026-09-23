@@ -79,6 +79,30 @@ export const logisticsService = {
     return updated;
   },
 
+  async claimJob(jobId: string, providerId: string, providerName: string): Promise<LogisticsJob> {
+    await delay(300);
+    const all = storageService.get<LogisticsJob[]>(STORE_KEYS.LOGISTICS_JOBS) ?? [];
+    const idx = all.findIndex((j) => j.id === jobId);
+    if (idx < 0) throw new Error('Logistics job not found.');
+    const job = all[idx];
+
+    const now = new Date().toISOString();
+    const updated: LogisticsJob = { ...job, providerId, providerName, status: 'ASSIGNED', updatedAt: now };
+    all[idx] = updated;
+    storageService.set(STORE_KEYS.LOGISTICS_JOBS, all);
+
+    await transactionService.transition({
+      transactionId: job.transactionId,
+      to: 'LOGISTICS_ASSIGNED',
+      actorId: providerId,
+      actorName: providerName,
+      actorRole: 'logistics',
+      note: `${providerName} claimed the logistics assignment.`,
+    });
+
+    return updated;
+  },
+
   async updateJobStatus(params: {
     jobId: string;
     status: LogisticsStatus;
@@ -114,6 +138,7 @@ export const logisticsService = {
       PICKED_UP: 'PICKED_UP',
       IN_TRANSIT: 'IN_TRANSIT',
       DELIVERED: 'DELIVERED',
+      COMPLETED: 'COMPLETED',
     };
 
     const txnStatus = txnStatusMap[params.status];

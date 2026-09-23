@@ -45,5 +45,6 @@ export const STORE_KEYS = {
   DISPUTES: 'disputes',
   NOTIFICATIONS: 'notifications',
   AUDIT_EVENTS: 'audit_events',
+  WITHDRAWALS: 'withdrawals',
   SEEDED: 'seeded',
 } as const;

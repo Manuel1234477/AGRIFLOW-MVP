@@ -10,11 +10,14 @@ import {
   CONTRACT_ID,
   connectWallet,
   getWalletKey,
-  invokeContract,
+  createAndDepositEscrow,
+  mintTestnetUsdc,
   stellarExpertLink,
-  txIdToScVal,
 } from '../lib/stellar';
+import { formatCommodity, formatCurrency } from '../utils/format';
 import type { Transaction } from '../types';
+
+export const USDC_RATE = 1350; // 1 USDC = ₦1,350
 
 export function CompletePaymentPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,14 +30,21 @@ export function CompletePaymentPage() {
   const [walletKey, setWalletKey] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isMinting, setIsMinting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    transactionService.getById(id || 'TXN-4821').then((transaction) => {
-      if (!cancelled && transaction) setTx(transaction);
-    });
-    return () => { cancelled = true; };
+    if (!id) return;
+    const targetId = id;
+    let isMounted = true;
+    async function load() {
+      const transaction = await transactionService.fetchById(targetId);
+      if (isMounted && transaction) {
+        setTx(transaction);
+      }
+    }
+    load();
+    return () => { isMounted = false; };
   }, [id]);
 
   useEffect(() => {
@@ -43,34 +53,44 @@ export function CompletePaymentPage() {
       .catch(() => setWalletKey(null));
   }, []);
 
-  const goodsSubtotal = 5760000;
-  const logisticsCost = 185000;
-  const platformFee = 57600;
-  const totalDue = goodsSubtotal + logisticsCost + platformFee; // 6,002,600 NGN
-  // 1 USDC ≈ 1,620 NGN (Stellar testnet reference rate)
-  const NGN_PER_USDC = 1620;
-  const totalDueUSDC = parseFloat((totalDue / NGN_PER_USDC).toFixed(2));
+  // Compute values using 1 USDC = 1,350 NGN rate
+  const rawAmount = tx ? (tx.totalAmount || (tx.quantity * tx.pricePerUnit)) : 5760000;
+  const isUsdcTx = tx?.currency === 'USDC';
+  const goodsSubtotalNgn = isUsdcTx ? Math.round(rawAmount * USDC_RATE) : rawAmount;
+  const goodsSubtotalUsdc = isUsdcTx ? rawAmount : Number((goodsSubtotalNgn / USDC_RATE).toFixed(2));
+
+  const logisticsCostNgn = Math.round(goodsSubtotalNgn * 0.035);
+  const logisticsCostUsdc = Number((logisticsCostNgn / USDC_RATE).toFixed(2));
+
+  const platformFeeNgn = Math.round(goodsSubtotalNgn * 0.01);
+  const platformFeeUsdc = Number((platformFeeNgn / USDC_RATE).toFixed(2));
+
+  const totalDueNgn = goodsSubtotalNgn + logisticsCostNgn + platformFeeNgn;
+  const totalDueUsdc = Number((totalDueNgn / USDC_RATE).toFixed(2));
 
   const handlePay = async () => {
-    if (!session) return;
+    if (!session || !tx) return;
     setPaying(true);
+    setErrorMessage(null);
     try {
       // 1. Initiate payment record
       const payment = await paymentService.initiate({
-        transactionId: tx?.id || 'TXN-4821',
+        transactionId: tx.id,
         payerId: session.userId,
         payerName: session.name,
-        amount: totalDue,
+        amount: totalDueNgn,
         currency: 'NGN',
       });
 
-      // 2. Confirm payment to advance state
+      // 2. Confirm payment to advance state (advances to PAYMENT_CONFIRMED & creates logistics job)
       await paymentService.confirm(payment.id, session.userId, session.name);
 
-      toast('success', `Payment of ₦${totalDue.toLocaleString()} confirmed and secured in escrow.`);
-      navigate(`/app/transactions/${tx?.id || 'TXN-4821'}/track`);
+      toast('success', `Payment of ${formatCurrency(totalDueNgn, 'NGN')} confirmed and secured in escrow.`);
+      navigate(`/app/transactions/${tx.id}`);
     } catch (err: unknown) {
-      toast('error', err instanceof Error ? err.message : 'Payment processing failed.');
+      const msg = err instanceof Error ? err.message : 'Payment processing failed.';
+      setErrorMessage(msg);
+      toast('error', msg);
     } finally {
       setPaying(false);
     }
@@ -87,39 +107,97 @@ export function CompletePaymentPage() {
     }
   };
 
+  const handleMintUsdc = async () => {
+    if (!walletKey) {
+      try {
+        const pk = await connectWallet();
+        setWalletKey(pk);
+      } catch {
+        return;
+      }
+    }
+    const targetKey = walletKey;
+    if (!targetKey) return;
+    setIsMinting(true);
+    try {
+      const hash = await mintTestnetUsdc(targetKey, 10000);
+      toast('success', `Minted 10,000 Testnet USDC to ${truncateKey(targetKey)}! Tx: ${hash.slice(0, 8)}…`);
+    } catch (err: unknown) {
+      toast('error', err instanceof Error ? err.message : 'Minting Testnet USDC failed.');
+    } finally {
+      setIsMinting(false);
+    }
+  };
+
   const handlePayStellar = async () => {
-    const txId = tx?.id || 'TXN-4821';
+    if (!tx || !session) return;
+    const txId = tx.id;
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
       const pubKey = walletKey ?? (await connectWallet());
       setWalletKey(pubKey);
 
-      const txIdVal = await txIdToScVal(txId);
-      const hash = await invokeContract('deposit', [txIdVal], pubKey);
+      const hash = await createAndDepositEscrow({
+        txId,
+        buyerPublicKey: pubKey,
+        supplierPublicKey: (tx as { supplierWallet?: string }).supplierWallet || undefined,
+        logisticsPublicKey: (tx as { logisticsWallet?: string }).logisticsWallet || undefined,
+        goodsAmount: goodsSubtotalUsdc,
+        logisticsAmount: logisticsCostUsdc,
+      });
       setTxHash(hash);
 
       const payment = await paymentService.initiate({
         transactionId: txId,
-        payerId: session?.userId ?? '',
-        payerName: session?.name ?? 'Buyer',
-        amount: totalDueUSDC,
+        payerId: session.userId,
+        payerName: session.name,
+        amount: totalDueUsdc,
         currency: 'USDC',
       });
-      await paymentService.confirm(payment.id, session?.userId ?? '', session?.name ?? '');
+      await paymentService.confirm(payment.id, session.userId, session.name);
 
-      toast('success', `Escrow deposit confirmed on Stellar Testnet. Hash: ${hash.slice(0, 8)}…`);
-      setTimeout(() => navigate(`/app/transactions/${txId}/track`), 2000);
+      toast('success', `Escrow deposit confirmed on Stellar Testnet.`);
+      setTimeout(() => navigate(`/app/transactions/${txId}`), 1500);
     } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : 'Stellar payment failed. Please try again.');
+      const msg = err instanceof Error ? err.message : 'Stellar payment failed. Please try again.';
+      setErrorMessage(msg);
+      toast('error', msg);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const isAlreadyPaid =
+    tx &&
+    tx.status !== 'PAYMENT_PENDING' &&
+    tx.status !== 'ACCEPTED' &&
+    tx.status !== 'PENDING';
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <FreighterBanner />
+
+      {isAlreadyPaid && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3.5 rounded-xl border bg-emerald-50 border-emerald-200 text-emerald-900 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div>
+              <div className="text-xs font-bold text-emerald-900">Escrow Payment Confirmed</div>
+              <div className="text-xs text-emerald-700">
+                Payment has already been confirmed and funds are secured in escrow.
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate(`/app/transactions/${tx?.id}`)}
+            className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg shadow-xs cursor-pointer whitespace-nowrap"
+          >
+            View Transaction & Tracking →
+          </button>
+        </div>
+      )}
 
       {errorMessage && (
         <div className="flex items-start gap-3 px-4 py-3 rounded-xl border bg-red-50 border-red-200 text-red-900">
@@ -173,9 +251,14 @@ export function CompletePaymentPage() {
         {/* Left Column: Payment Method Selection */}
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-xs space-y-4">
-            <h2 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3">
-              Payment method
-            </h2>
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h2 className="text-sm font-semibold text-gray-900">
+                Payment method
+              </h2>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-[11px] font-semibold">
+                <span>1 USDC ≈ ₦1,350</span>
+              </div>
+            </div>
 
             <div className="space-y-3">
               {/* USDC (Soroban Escrow) */}
@@ -196,29 +279,46 @@ export function CompletePaymentPage() {
                       onChange={() => setPaymentMethod('stellar')}
                       className="mt-0.5 accent-gray-900"
                     />
-                    <div>
-                      <div className="text-xs font-bold text-gray-900">Pay with USDC (Soroban Escrow)</div>
-                      <div className="text-xs text-gray-500 mt-0.5">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-900">Pay with USDC (Soroban Escrow)</span>
+                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                          {totalDueUsdc.toFixed(2)} USDC
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500">
                         Escrow on Stellar Testnet · funds released on delivery confirmation
                       </div>
-                      {walletKey ? (
-                        <div className="inline-flex items-center gap-2 mt-2 px-2.5 py-1 rounded-full bg-green-50 border border-green-200 text-green-800 text-xs font-medium">
-                          <span className="font-mono">{truncateKey(walletKey)}</span>
-                          <span className="inline-flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            Connected
-                          </span>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handleConnectWallet}
-                          disabled={isSubmitting}
-                          className="mt-2 px-3 py-1.5 text-xs font-semibold text-white bg-agri-700 hover:bg-agri-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
-                        >
-                          Connect Freighter
-                        </button>
-                      )}
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {walletKey ? (
+                          <>
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 border border-green-200 text-green-800 text-xs font-medium">
+                              <span className="font-mono">{truncateKey(walletKey)}</span>
+                              <span className="inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Connected
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleMintUsdc}
+                              disabled={isMinting || isSubmitting}
+                              className="px-2.5 py-1 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors shadow-xs disabled:opacity-50 inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              {isMinting ? 'Minting 10,000 USDC…' : '+ Mint 10,000 Testnet USDC'}
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleConnectWallet}
+                            disabled={isSubmitting}
+                            className="px-3 py-1.5 text-xs font-semibold text-white bg-agri-700 hover:bg-agri-800 rounded-lg transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+                          >
+                            Connect Freighter
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <span className="text-xs font-medium text-gray-500">
@@ -248,7 +348,7 @@ export function CompletePaymentPage() {
                     <div>
                       <div className="text-xs font-bold text-gray-900">Bank transfer</div>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        Pay from your bank app or internet banking
+                        Pay ₦{totalDueNgn.toLocaleString()} from your bank app or internet banking
                       </div>
                     </div>
                   </div>
@@ -276,7 +376,7 @@ export function CompletePaymentPage() {
                     />
                     <div>
                       <div className="text-xs font-bold text-gray-900">Debit card</div>
-                      <div className="text-xs text-gray-500 mt-0.5">Visa, Mastercard or Verve</div>
+                      <div className="text-xs text-gray-500 mt-0.5">Visa, Mastercard or Verve (₦{totalDueNgn.toLocaleString()})</div>
                     </div>
                   </div>
                   <span className="text-xs font-medium text-gray-500">1.4% fee</span>
@@ -312,50 +412,55 @@ export function CompletePaymentPage() {
             </h2>
 
             <div>
-              <div className="text-sm font-bold text-gray-900">White Maize — Grade A</div>
+              <div className="text-sm font-bold text-gray-900">
+                {tx ? `${formatCommodity(tx.commodity)} — Grade ${tx.qualityGrade}` : 'Agricultural Commodity'}
+              </div>
               <div className="text-xs text-gray-500 mt-0.5">
-                12 tonnes · Oyo State → Ikeja, Lagos
+                {tx ? `${tx.quantity} ${tx.unit} · ${tx.pickupLocation} → ${tx.deliveryLocation}` : '12 tonnes'}
               </div>
             </div>
 
             <div className="space-y-2 text-xs pt-2 border-t border-gray-100">
               <div className="flex justify-between text-gray-600">
                 <span>Goods subtotal</span>
-                <span className="font-medium text-gray-900">₦{goodsSubtotal.toLocaleString()}</span>
+                <span className="font-medium text-gray-900">
+                  ₦{goodsSubtotalNgn.toLocaleString()} <span className="text-gray-400">({goodsSubtotalUsdc.toFixed(2)} USDC)</span>
+                </span>
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>Logistics</span>
-                <span className="font-medium text-gray-900">₦{logisticsCost.toLocaleString()}</span>
+                <span className="font-medium text-gray-900">
+                  ₦{logisticsCostNgn.toLocaleString()} <span className="text-gray-400">({logisticsCostUsdc.toFixed(2)} USDC)</span>
+                </span>
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>Platform fee</span>
-                <span className="font-medium text-gray-900">₦{platformFee.toLocaleString()}</span>
+                <span className="font-medium text-gray-900">
+                  ₦{platformFeeNgn.toLocaleString()} <span className="text-gray-400">({platformFeeUsdc.toFixed(2)} USDC)</span>
+                </span>
               </div>
               <div className="flex justify-between text-sm font-bold text-gray-900 pt-3 border-t border-gray-100">
                 <span>Total due</span>
-                <span>₦{totalDue.toLocaleString()}</span>
-              </div>
-              {paymentMethod === 'stellar' && (
-                <div className="flex justify-between text-xs text-gray-500 pt-1">
-                  <span>≈ USDC equivalent</span>
-                  <span className="font-semibold text-gray-700">{totalDueUSDC.toLocaleString()} USDC</span>
+                <div className="text-right">
+                  <div>₦{totalDueNgn.toLocaleString()}</div>
+                  <div className="text-xs font-semibold text-emerald-700">{totalDueUsdc.toFixed(2)} USDC</div>
                 </div>
-              )}
+              </div>
             </div>
 
             <button
               type="button"
               disabled={paying || isSubmitting || (paymentMethod === 'stellar' && !CONTRACT_ID)}
               onClick={paymentMethod === 'stellar' ? handlePayStellar : handlePay}
-              className="w-full mt-2 py-3 px-4 text-xs font-semibold text-white bg-agri-700 hover:bg-agri-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
+              className="w-full mt-2 py-3 px-4 text-xs font-semibold text-white bg-agri-700 hover:bg-agri-800 rounded-lg transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
             >
               {isSubmitting
                 ? 'Depositing to Soroban escrow…'
                 : paying
                   ? 'Securing funds in escrow...'
                   : paymentMethod === 'stellar'
-                    ? `Deposit ${totalDueUSDC.toLocaleString()} USDC into escrow`
-                    : `Pay ₦${totalDue.toLocaleString()}`}
+                    ? `Deposit ${totalDueUsdc.toFixed(2)} USDC into escrow (₦${totalDueNgn.toLocaleString()})`
+                    : `Pay ₦${totalDueNgn.toLocaleString()}`}
             </button>
 
             {txHash && (

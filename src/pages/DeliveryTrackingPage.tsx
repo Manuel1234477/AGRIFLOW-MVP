@@ -1,20 +1,131 @@
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { Truck } from 'lucide-react';
 import { useToast } from '../components/ui/Toast';
+import { useApp } from '../context/AppContext';
+import { transactionService } from '../services/transactionService';
+import { logisticsService } from '../services/logisticsService';
+import { LiveDeliveryMap } from '../components/map/LiveDeliveryMap';
+import { formatCommodity, formatDateTime } from '../utils/format';
+import type { Transaction, LogisticsJob, TransactionStatus } from '../types';
+
+const STATUS_PROGRESS: Partial<Record<TransactionStatus, number>> = {
+  PENDING: 5,
+  PENDING_SUPPLIER_ACCEPTANCE: 5,
+  ACCEPTED: 10,
+  REJECTED: 0,
+  PAYMENT_PENDING: 15,
+  PAYMENT_CONFIRMED: 25,
+  LOGISTICS_PENDING: 30,
+  LOGISTICS_ASSIGNED: 40,
+  LOGISTICS_ACCEPTED: 50,
+  LOGISTICS_REJECTED: 30,
+  READY_FOR_PICKUP: 60,
+  PICKED_UP: 70,
+  IN_TRANSIT: 80,
+  DELIVERED: 90,
+  DELIVERY_CONFIRMED: 95,
+  BUYER_CONFIRMATION_PENDING: 95,
+  COMPLETED: 100,
+  DISPUTED: 50,
+  CANCELLED: 0,
+  PAYMENT_FAILED: 0,
+  PAYMENT_CANCELLED: 0,
+  DELIVERY_FAILED: 50,
+};
 
 export function DeliveryTrackingPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { session } = useApp();
   const { toast } = useToast();
+  const [tx, setTx] = useState<Transaction | null>(null);
+  const [job, setJob] = useState<LogisticsJob | null>(null);
+  const [allDeliverables, setAllDeliverables] = useState<Transaction[]>([]);
+
+  useEffect(() => {
+    if (!session) return;
+    let isMounted = true;
+
+    async function loadData() {
+      let txns: Transaction[] = [];
+      if (session?.role === 'buyer') {
+        txns = transactionService.getForBuyer(session.userId);
+      } else if (session?.role === 'supplier') {
+        txns = transactionService.getForSupplier(session.userId);
+      } else if (session?.role === 'logistics') {
+        const myJobs = logisticsService.getForProvider(session.userId);
+        const jobTxnIds = myJobs.map((j) => j.transactionId);
+        txns = transactionService.getAll().filter((t) => jobTxnIds.includes(t.id));
+        if (txns.length === 0) {
+          txns = transactionService.getAll();
+        }
+      } else {
+        txns = transactionService.getAll();
+      }
+
+      if (isMounted) {
+        setAllDeliverables(txns);
+      }
+
+      const targetId = id || txns[0]?.id;
+      if (targetId) {
+        const t = await transactionService.fetchById(targetId);
+        if (isMounted && t) {
+          setTx(t);
+          const j =
+            logisticsService.getForTransaction(t.id) ||
+            (t.logisticsJobId ? logisticsService.getById(t.logisticsJobId) : null);
+          setJob(j);
+        }
+      }
+    }
+
+    loadData();
+    return () => {
+      isMounted = false;
+    };
+  }, [id, session]);
+
+  const progress = tx ? STATUS_PROGRESS[tx.status] ?? 50 : 50;
+  const isCompleted = tx?.status === 'COMPLETED';
+  const isDelivered = tx?.status === 'DELIVERED' || tx?.status === 'BUYER_CONFIRMATION_PENDING';
+  const carrierName =
+    job?.providerName ||
+    tx?.history?.find((h) => h.actorRole === 'logistics')?.actor ||
+    'SwiftHaul Logistics';
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      {/* Back Link */}
-      <div>
+      {/* Top Bar with Back Link & Deliverables Switcher */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <Link
-          to="/app/deliveries"
+          to="/app/dashboard"
           className="text-xs font-medium text-gray-500 hover:text-gray-900 inline-flex items-center gap-1"
         >
-          ← Back to Deliveries
+          ← Back to Dashboard
         </Link>
+
+        {allDeliverables.length > 1 && (
+          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-xs">
+            <Truck className="w-3.5 h-3.5 text-agri-700 shrink-0" />
+            <label htmlFor="deliverable-select" className="text-xs font-semibold text-gray-700 whitespace-nowrap">
+              Switch Deliverable:
+            </label>
+            <select
+              id="deliverable-select"
+              value={tx?.id || ''}
+              onChange={(e) => navigate(`/app/transactions/${e.target.value}/track`)}
+              className="text-xs font-medium text-gray-900 bg-transparent border-0 outline-none cursor-pointer pr-2"
+            >
+              {allDeliverables.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.id} · {formatCommodity(d.commodity)} ({d.quantity} {d.unit}) · {d.status.replace(/_/g, ' ')}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Header */}
@@ -22,133 +133,83 @@ export function DeliveryTrackingPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Delivery tracking</h1>
           <p className="text-xs text-gray-500 mt-1">
-            {id || 'TXN-4821'} · White Maize · 12 tonnes · JOB-8871
+            {tx ? `${tx.id} · ${formatCommodity(tx.commodity)} · ${tx.quantity} ${tx.unit}` : (id || 'TXN-AGF')}
           </p>
         </div>
-        <div>
-          <span className="status-pill status-pill-blue">IN_TRANSIT</span>
+        <div className="flex items-center gap-2">
+          <span className="status-pill status-pill-blue">{tx?.status || 'IN_TRANSIT'}</span>
+          {(isDelivered || tx?.status === 'DELIVERED') && session?.role === 'buyer' && (
+            <button
+              type="button"
+              onClick={() => navigate(`/app/transactions/${tx?.id}/confirm`)}
+              className="px-3 py-1.5 text-xs font-semibold text-white bg-agri-700 hover:bg-agri-800 rounded-lg shadow-xs cursor-pointer"
+            >
+              Confirm Receipt & Release Escrow
+            </button>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Left Column: Live location & Timeline */}
+        {/* Left Column: Live Map & Timeline */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Live Location Card */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-gray-900">Live location</span>
-              <span className="text-gray-500">Updated 4 minutes ago</span>
-            </div>
-
-            {/* Map Placeholder Graphic */}
-            <div className="h-48 bg-gray-100/70 border border-gray-200 rounded-lg relative overflow-hidden flex items-center justify-center">
-              <div className="w-full px-8">
-                <div className="relative flex items-center justify-between">
-                  <div className="text-center z-10">
-                    <div className="w-3.5 h-3.5 rounded-full bg-gray-700 mx-auto" />
-                    <div className="text-[11px] font-semibold text-gray-900 mt-1">Ogbomoso</div>
-                    <div className="text-[9px] text-gray-500">Pickup 09:24</div>
-                  </div>
-
-                  <div className="absolute inset-x-12 top-1.5 h-1 bg-gray-200">
-                    <div className="h-full bg-agri-600 w-3/5" />
-                  </div>
-
-                  {/* Moving truck indicator */}
-                  <div className="text-center z-10 ml-12">
-                    <div className="w-6 h-6 rounded-full bg-agri-700 text-white flex items-center justify-center text-[10px] font-bold shadow-sm mx-auto">
-                      🚚
-                    </div>
-                    <div className="text-[11px] font-bold text-agri-800 mt-0.5">Ibadan</div>
-                    <div className="text-[9px] text-gray-500">In Transit</div>
-                  </div>
-
-                  <div className="text-center z-10">
-                    <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-700 bg-white mx-auto" />
-                    <div className="text-[11px] font-semibold text-gray-900 mt-1">Ikeja</div>
-                    <div className="text-[9px] text-gray-500">Destination</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between text-xs pt-1 border-t border-gray-50">
-              <span className="font-medium text-gray-800">Currently near Ibadan, Oyo State</span>
-              <span className="font-semibold text-agri-800">ETA: 31 Aug, ~16:00</span>
-            </div>
-          </div>
+          <LiveDeliveryMap
+            originName={tx?.pickupLocation || 'Pickup Hub'}
+            destinationName={tx?.deliveryLocation || 'Delivery Destination'}
+            progressPercent={progress}
+            eta={isCompleted ? 'Delivered' : isDelivered ? 'Arrived at Destination' : 'In Transit · Approx 2h 45m'}
+          />
 
           {/* Timeline Card */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs space-y-4">
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Timeline
+              Consignment Timeline
             </h2>
 
-            <div className="space-y-4 text-xs">
-              {/* Event 1 */}
-              <div className="flex items-start gap-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-gray-800 mt-1 shrink-0" />
-                <div>
-                  <div className="font-semibold text-gray-900">
-                    PAYMENT_CONFIRMED <span className="font-normal text-gray-500 ml-2">27 Aug, 14:32</span>
+            {tx?.history && tx.history.length > 0 ? (
+              <div className="space-y-4 text-xs">
+                {tx.history.map((event, idx) => {
+                  const isLatest = idx === tx.history.length - 1;
+                  return (
+                    <div key={idx} className="flex items-start gap-3">
+                      <div
+                        className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${
+                          isLatest
+                            ? 'bg-agri-700 ring-4 ring-agri-100'
+                            : 'bg-gray-800'
+                        }`}
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-gray-900">{event.status.replace(/_/g, ' ')}</span>
+                          <span className="text-[11px] text-gray-400 font-mono">
+                            {formatDateTime(event.timestamp)}
+                          </span>
+                        </div>
+                        <div className="text-gray-600 mt-0.5">
+                          {event.note || `Status updated to ${event.status}`}
+                        </div>
+                        {event.actor && (
+                          <div className="text-[11px] text-gray-400 mt-0.5">
+                            By: {event.actor} ({event.actorRole})
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-4 text-xs">
+                <div className="flex items-start gap-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-agri-700 ring-4 ring-agri-100 mt-1 shrink-0" />
+                  <div>
+                    <div className="font-bold text-gray-900">{tx?.status || 'IN_TRANSIT'}</div>
+                    <div className="text-gray-600 mt-0.5">Consignment active on transit route.</div>
                   </div>
-                  <div className="text-gray-500 mt-0.5">Payment received and held by AgriFlow</div>
                 </div>
               </div>
-
-              {/* Event 2 */}
-              <div className="flex items-start gap-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-gray-800 mt-1 shrink-0" />
-                <div>
-                  <div className="font-semibold text-gray-900">
-                    LOGISTICS_ACCEPTED <span className="font-normal text-gray-500 ml-2">27 Aug, 16:10</span>
-                  </div>
-                  <div className="text-gray-500 mt-0.5">SwiftHaul Logistics accepted JOB-8871</div>
-                </div>
-              </div>
-
-              {/* Event 3 */}
-              <div className="flex items-start gap-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-gray-800 mt-1 shrink-0" />
-                <div>
-                  <div className="font-semibold text-gray-900">
-                    PICKED_UP <span className="font-normal text-gray-500 ml-2">29 Aug, 09:24</span>
-                  </div>
-                  <div className="text-gray-500 mt-0.5">Goods collected from Ogbomoso</div>
-                </div>
-              </div>
-
-              {/* Event 4 */}
-              <div className="flex items-start gap-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-agri-700 ring-4 ring-agri-100 mt-1 shrink-0" />
-                <div>
-                  <div className="font-bold text-gray-900">
-                    IN_TRANSIT <span className="font-normal text-gray-500 ml-2">29 Aug, 09:30</span>
-                  </div>
-                  <div className="text-gray-600 mt-0.5 font-medium">En route to Ikeja, Lagos</div>
-                </div>
-              </div>
-
-              {/* Event 5 */}
-              <div className="flex items-start gap-3 opacity-60">
-                <div className="w-2.5 h-2.5 rounded-full border border-gray-400 mt-1 shrink-0" />
-                <div>
-                  <div className="font-semibold text-gray-700">
-                    DELIVERED <span className="font-normal text-gray-400 ml-2">Expected 31 Aug</span>
-                  </div>
-                  <div className="text-gray-500 mt-0.5">Awaiting delivery confirmation</div>
-                </div>
-              </div>
-
-              {/* Event 6 */}
-              <div className="flex items-start gap-3 opacity-60">
-                <div className="w-2.5 h-2.5 rounded-full border border-gray-400 mt-1 shrink-0" />
-                <div>
-                  <div className="font-semibold text-gray-700">COMPLETED</div>
-                  <div className="text-gray-500 mt-0.5">Awaiting your receipt confirmation</div>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -157,66 +218,70 @@ export function DeliveryTrackingPage() {
           {/* Carrier Card */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs space-y-3">
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Carrier
+              Assigned Carrier
             </h2>
 
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center font-bold text-gray-700">
-                S
+              <div className="w-9 h-9 rounded-lg bg-agri-50 border border-agri-200 flex items-center justify-center font-bold text-agri-800">
+                {carrierName.charAt(0).toUpperCase()}
               </div>
               <div>
-                <div className="text-xs font-bold text-gray-900">SwiftHaul Logistics</div>
-                <div className="text-[11px] text-gray-500">Covered truck · LAG-448-XA</div>
+                <div className="text-xs font-bold text-gray-900">{carrierName}</div>
+                <div className="text-[11px] text-gray-500">Verified Logistics Partner</div>
               </div>
             </div>
 
             <button
               type="button"
-              onClick={() => toast('info', 'Connecting to driver (+234 803 456 7890)...')}
-              className="w-full mt-2 py-2 px-3 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors"
+              onClick={() => toast('info', `Connecting to dispatch for ${carrierName}...`)}
+              className="w-full mt-2 py-2 px-3 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors cursor-pointer"
             >
-              Contact carrier
+              Contact Carrier
             </button>
           </div>
 
           {/* Shipment Card */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs space-y-3">
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Shipment
+              Shipment Details
             </h2>
 
             <div className="space-y-2 text-xs">
               <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-gray-500">From</span>
-                <span className="font-medium text-gray-900">Ogbomoso, Oyo State</span>
+                <span className="text-gray-500">Origin / Pickup</span>
+                <span className="font-medium text-gray-900 text-right">{tx?.pickupLocation || 'Pickup Hub'}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-gray-500">To</span>
-                <span className="font-medium text-gray-900">Ikeja, Lagos</span>
+                <span className="text-gray-500">Destination</span>
+                <span className="font-medium text-gray-900 text-right">{tx?.deliveryLocation || 'Delivery Depot'}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-gray-500">Distance remaining</span>
-                <span className="font-medium text-gray-900">78 km</span>
+                <span className="text-gray-500">Commodity</span>
+                <span className="font-medium text-gray-900">
+                  {tx ? `${formatCommodity(tx.commodity)} (${tx.quantity} ${tx.unit})` : '—'}
+                </span>
               </div>
               <div className="flex justify-between py-1">
-                <span className="text-gray-500">Payment status</span>
-                <span className="font-semibold text-agri-800">Held by AgriFlow</span>
+                <span className="text-gray-500">Payment Escrow</span>
+                <span className="font-semibold text-emerald-700">
+                  {isCompleted ? 'Escrow Released' : 'Secured in Soroban'}
+                </span>
               </div>
             </div>
           </div>
 
           {/* Problem with delivery */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs space-y-2.5">
-            <h3 className="text-xs font-semibold text-gray-900">Problem with this delivery?</h3>
+            <h3 className="text-xs font-semibold text-gray-900">Problem with this consignment?</h3>
             <p className="text-xs text-gray-500 leading-relaxed">
-              If goods are delayed or an incident occurs on route, notify operations.
+              If goods are delayed or quality issues occur during transit, notify Operations or initiate dispute resolution.
             </p>
             <button
               type="button"
-              onClick={() => toast('info', 'Opening incident support ticket...')}
-              className="w-full py-2 px-3 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors"
+              onClick={() => navigate('/app/admin/disputes')}
+              className="w-full py-2 px-3 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors cursor-pointer"
             >
-              Report an issue
+              Report an Issue / Dispute
             </button>
           </div>
         </div>

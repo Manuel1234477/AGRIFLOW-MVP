@@ -13,10 +13,13 @@ pub struct Transaction {
     pub supplier_id: String,
     pub supplier_name: String,
     pub commodity: String,
+    #[serde(with = "rust_decimal::serde::float")]
     pub quantity: Decimal,
     pub unit: String,
     pub quality_grade: String,
+    #[serde(with = "rust_decimal::serde::float")]
     pub price_per_unit: Decimal,
+    #[serde(with = "rust_decimal::serde::float")]
     pub total_amount: Decimal,
     pub currency: String,
     pub pickup_location: String,

@@ -1,33 +1,37 @@
-// Storage abstraction — single source of localStorage access
+// In-Memory Storage runtime store — localStorage usage has been wiped out
+// All entities are retrieved and synchronized via backend REST API endpoints
 
-const PREFIX = 'agriflow_';
+const memoryStore = new Map<string, any>();
+
+// Auto-purge any stale agriflow localStorage keys from browser
+if (typeof window !== 'undefined' && window.localStorage) {
+  try {
+    Object.keys(window.localStorage)
+      .filter((k) => k.startsWith('agriflow_') && k !== 'agriflow_jwt' && k !== 'agriflow_lang')
+      .forEach((k) => window.localStorage.removeItem(k));
+  } catch {
+    // ignore
+  }
+}
 
 export const storageService = {
   get<T>(key: string): T | null {
-    try {
-      const raw = localStorage.getItem(PREFIX + key);
-      return raw ? (JSON.parse(raw) as T) : null;
-    } catch {
-      return null;
+    if (memoryStore.has(key)) {
+      return memoryStore.get(key) as T;
     }
+    return null;
   },
 
   set<T>(key: string, value: T): void {
-    try {
-      localStorage.setItem(PREFIX + key, JSON.stringify(value));
-    } catch {
-      console.error('Storage write failed for key:', key);
-    }
+    memoryStore.set(key, value);
   },
 
   remove(key: string): void {
-    localStorage.removeItem(PREFIX + key);
+    memoryStore.delete(key);
   },
 
   clear(): void {
-    Object.keys(localStorage)
-      .filter((k) => k.startsWith(PREFIX))
-      .forEach((k) => localStorage.removeItem(k));
+    memoryStore.clear();
   },
 };
 

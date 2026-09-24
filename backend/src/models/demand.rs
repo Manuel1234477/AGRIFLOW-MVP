@@ -19,11 +19,13 @@ pub struct DemandRequest {
     pub buyer_id: String,
     pub buyer_name: String,
     pub commodity: String,
+    #[serde(with = "rust_decimal::serde::float")]
     pub quantity: Decimal,
     pub unit: String,
     pub quality_grade: String,
     pub destination_location: String,
     pub required_by_date: DateTime<Utc>,
+    #[serde(with = "rust_decimal::serde::float")]
     pub indicative_budget: Decimal,
     pub currency: String,
     pub notes: Option<String>,

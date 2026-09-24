@@ -60,59 +60,79 @@ pub async fn create(
         )));
     }
 
-    let id = ids::generate("TXN-AGF");
     let total_amount = body.quantity * listing.price_per_unit;
 
-    let mut tx = state.db.begin().await?;
+    let mut result = None;
+    for _ in 0..ids::MAX_ID_ATTEMPTS {
+        let id = ids::generate("TXN-AGF");
+        let mut tx = state.db.begin().await?;
 
-    let txn = sqlx::query_as!(
-        Transaction,
-        r#"
-        INSERT INTO transactions
-            (id, listing_id, demand_id, buyer_id, buyer_name, supplier_id, supplier_name,
-             commodity, quantity, unit, quality_grade, price_per_unit, total_amount, currency,
-             pickup_location, delivery_location, expected_delivery_date, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'PENDING')
-        RETURNING id, listing_id, demand_id, buyer_id, buyer_name, supplier_id, supplier_name,
-                  commodity, quantity, unit, quality_grade, price_per_unit, total_amount, currency,
-                  pickup_location, delivery_location, expected_delivery_date, status, payment_id,
-                  logistics_job_id, dispute_id, created_at, updated_at
-        "#,
-        id,
-        listing.id,
-        body.demand_id,
-        auth.user_id,
-        auth.name,
-        listing.supplier_id,
-        listing.supplier_name,
-        listing.commodity,
-        body.quantity,
-        listing.unit,
-        listing.quality_grade,
-        listing.price_per_unit,
-        total_amount,
-        listing.currency,
-        listing.location,
-        body.delivery_location,
-        body.expected_delivery_date,
-    )
-    .fetch_one(&mut *tx)
-    .await?;
+        let insert = sqlx::query_as!(
+            Transaction,
+            r#"
+            INSERT INTO transactions
+                (id, listing_id, demand_id, buyer_id, buyer_name, supplier_id, supplier_name,
+                 commodity, quantity, unit, quality_grade, price_per_unit, total_amount, currency,
+                 pickup_location, delivery_location, expected_delivery_date, status)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'PENDING')
+            RETURNING id, listing_id, demand_id, buyer_id, buyer_name, supplier_id, supplier_name,
+                      commodity, quantity, unit, quality_grade, price_per_unit, total_amount, currency,
+                      pickup_location, delivery_location, expected_delivery_date, status, payment_id,
+                      logistics_job_id, dispute_id, created_at, updated_at
+            "#,
+            id,
+            listing.id,
+            body.demand_id,
+            auth.user_id,
+            auth.name,
+            listing.supplier_id,
+            listing.supplier_name,
+            listing.commodity,
+            body.quantity,
+            listing.unit,
+            listing.quality_grade,
+            listing.price_per_unit,
+            total_amount,
+            listing.currency,
+            listing.location,
+            body.delivery_location,
+            body.expected_delivery_date,
+        )
+        .fetch_one(&mut *tx)
+        .await;
 
-    let event = sqlx::query_as!(
-        TransactionEvent,
-        r#"
-        INSERT INTO transaction_events (transaction_id, status, actor, actor_role, note)
-        VALUES ($1, 'PENDING', $2, 'buyer', 'Transaction initiated by buyer.')
-        RETURNING id, transaction_id, status, actor, actor_role, note, created_at
-        "#,
-        txn.id,
-        auth.name,
-    )
-    .fetch_one(&mut *tx)
-    .await?;
+        // A collision drops `tx` here (implicit rollback) and retries with a
+        // fresh id and a fresh transaction -- Postgres won't run further
+        // statements on a transaction that already had a failed statement.
+        let txn = match insert {
+            Ok(t) => t,
+            Err(e) if ids::is_id_collision(&e) => continue,
+            Err(e) => return Err(e.into()),
+        };
 
-    tx.commit().await?;
+        let event = sqlx::query_as!(
+            TransactionEvent,
+            r#"
+            INSERT INTO transaction_events (transaction_id, status, actor, actor_role, note)
+            VALUES ($1, 'PENDING', $2, 'buyer', 'Transaction initiated by buyer.')
+            RETURNING id, transaction_id, status, actor, actor_role, note, created_at
+            "#,
+            txn.id,
+            auth.name,
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        result = Some((txn, event));
+        break;
+    }
+    let (txn, event) = result.ok_or_else(|| {
+        AppError::Internal(anyhow::anyhow!(
+            "failed to generate a unique transaction id after {} attempts",
+            ids::MAX_ID_ATTEMPTS
+        ))
+    })?;
 
     Ok(Json(TransactionWithHistory {
         transaction: txn,

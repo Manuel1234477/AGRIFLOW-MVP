@@ -10,6 +10,7 @@ use crate::ids;
 use crate::models::listing::{CreateListingRequest, ListingStatus, SupplyListing, UpdateListingRequest};
 use crate::models::user::UserRole;
 use crate::state::AppState;
+use crate::validation::require_non_empty;
 
 #[derive(Debug, Deserialize)]
 pub struct ListingQuery {
@@ -19,6 +20,7 @@ pub struct ListingQuery {
 
 pub async fn list_active(
     State(state): State<AppState>,
+    _auth: AuthUser,
     Query(q): Query<ListingQuery>,
 ) -> AppResult<Json<Vec<SupplyListing>>> {
     let status = q.status.unwrap_or_else(|| "active".to_string());
@@ -67,6 +69,7 @@ pub async fn mine(
 
 pub async fn get_one(
     State(state): State<AppState>,
+    _auth: AuthUser,
     Path(id): Path<String>,
 ) -> AppResult<Json<SupplyListing>> {
     let listing = sqlx::query_as!(
@@ -93,6 +96,11 @@ pub async fn create(
 ) -> AppResult<Json<SupplyListing>> {
     auth.require_role(UserRole::Supplier)?;
 
+    require_non_empty("commodity", &body.commodity)?;
+    require_non_empty("unit", &body.unit)?;
+    require_non_empty("qualityGrade", &body.quality_grade)?;
+    require_non_empty("location", &body.location)?;
+
     if body.quantity <= rust_decimal::Decimal::ZERO {
         return Err(AppError::BadRequest("Quantity must be greater than zero.".into()));
     }
@@ -100,36 +108,53 @@ pub async fn create(
         return Err(AppError::BadRequest("Price cannot be negative.".into()));
     }
 
-    let id = ids::generate("SUP");
     let currency = body.currency.unwrap_or_else(|| "NGN".to_string());
     let description = body.description.unwrap_or_default();
 
-    let listing = sqlx::query_as!(
-        SupplyListing,
-        r#"
-        INSERT INTO supply_listings
-            (id, supplier_id, supplier_name, supplier_verified, commodity, quantity, unit,
-             quality_grade, price_per_unit, currency, location, availability_date, description, status)
-        VALUES ($1, $2, $3, TRUE, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active')
-        RETURNING id, supplier_id, supplier_name, supplier_verified, commodity, quantity,
-                  unit, quality_grade, price_per_unit, currency, location, availability_date,
-                  description, status as "status: _", created_at, updated_at
-        "#,
-        id,
-        auth.user_id,
-        auth.name,
-        body.commodity,
-        body.quantity,
-        body.unit,
-        body.quality_grade,
-        body.price_per_unit,
-        currency,
-        body.location,
-        body.availability_date,
-        description,
-    )
-    .fetch_one(&state.db)
-    .await?;
+    let mut listing = None;
+    for _ in 0..ids::MAX_ID_ATTEMPTS {
+        let id = ids::generate("SUP");
+        match sqlx::query_as!(
+            SupplyListing,
+            r#"
+            INSERT INTO supply_listings
+                (id, supplier_id, supplier_name, supplier_verified, commodity, quantity, unit,
+                 quality_grade, price_per_unit, currency, location, availability_date, description, status)
+            VALUES ($1, $2, $3, TRUE, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active')
+            RETURNING id, supplier_id, supplier_name, supplier_verified, commodity, quantity,
+                      unit, quality_grade, price_per_unit, currency, location, availability_date,
+                      description, status as "status: _", created_at, updated_at
+            "#,
+            id,
+            auth.user_id,
+            auth.name,
+            body.commodity,
+            body.quantity,
+            body.unit,
+            body.quality_grade,
+            body.price_per_unit,
+            currency,
+            body.location,
+            body.availability_date,
+            description,
+        )
+        .fetch_one(&state.db)
+        .await
+        {
+            Ok(l) => {
+                listing = Some(l);
+                break;
+            }
+            Err(e) if ids::is_id_collision(&e) => continue,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    let listing = listing.ok_or_else(|| {
+        AppError::Internal(anyhow::anyhow!(
+            "failed to generate a unique listing id after {} attempts",
+            ids::MAX_ID_ATTEMPTS
+        ))
+    })?;
 
     Ok(Json(listing))
 }

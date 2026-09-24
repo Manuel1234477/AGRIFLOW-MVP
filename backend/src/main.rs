@@ -7,6 +7,7 @@ mod models;
 mod routes;
 mod state;
 mod state_machine;
+mod validation;
 
 use sqlx::postgres::PgPoolOptions;
 

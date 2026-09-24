@@ -3,7 +3,9 @@ import { storageService, STORE_KEYS } from './storageService';
 import { auditService } from './auditService';
 import { hashPassword } from './seedService';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://agriflow-api-production.up.railway.app';
+// See src/lib/api.ts for why this defaults to a same-origin relative path
+// rather than a hardcoded production URL.
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 interface ApiAuthResponse {
   token: string;

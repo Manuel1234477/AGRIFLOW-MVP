@@ -8,6 +8,23 @@ pub fn generate(prefix: &str) -> String {
     format!("{prefix}-{suffix}")
 }
 
+/// The random suffix is only ~90,000 values wide, so a collision is a real
+/// (if rare) possibility on a table with enough rows -- see API_AUDIT.md R4.
+/// Every INSERT that assigns a fresh id retries up to this many times,
+/// regenerating the id on a primary-key collision, rather than switching the
+/// whole codebase to UUIDs and losing the human-readable ids README.md calls
+/// out as intentional.
+pub const MAX_ID_ATTEMPTS: u8 = 5;
+
+/// True if `err` is a Postgres unique-violation specifically on a table's
+/// primary key (its auto-generated `<table>_pkey` constraint) -- as opposed
+/// to, say, `users_email_key`, which no amount of retrying with a new id
+/// would ever resolve.
+pub fn is_id_collision(err: &sqlx::Error) -> bool {
+    let Some(db_err) = err.as_database_error() else { return false };
+    db_err.is_unique_violation() && db_err.constraint().is_some_and(|c| c.ends_with("_pkey"))
+}
+
 pub fn user_id(role: &str) -> String {
     let prefix = match role {
         "buyer" => "USR-BUY",

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle2, Circle, Loader2, CreditCard,
   AlertTriangle, BookOpen,
@@ -17,16 +17,20 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { Input, Textarea } from '../components/ui/Input';
+import { supplyService } from '../services/supplyService';
+import { ListingMediaViewer } from '../components/ui/ListingMediaViewer';
 import { formatCurrency, formatDate, formatDateTime, formatCommodity, COMMODITY_ICONS } from '../utils/format';
 import { CONTRACT_ID } from '../lib/stellar';
-import type { Transaction, TransactionStatus, Payment, LogisticsJob, AuditEvent } from '../types';
+import type { Transaction, TransactionStatus, Payment, LogisticsJob, AuditEvent, SupplyListing } from '../types';
 
 export function TransactionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { session, refreshNotifications } = useApp();
   const { toast } = useToast();
   const [txn, setTxn] = useState<Transaction | null>(null);
+  const [listing, setListing] = useState<SupplyListing | null>(null);
   const [payment, setPayment] = useState<Payment | null>(null);
   const [job, setJob] = useState<LogisticsJob | null>(null);
   const [audit, setAudit] = useState<AuditEvent[]>([]);
@@ -40,11 +44,38 @@ export function TransactionDetailPage() {
     if (!id) return;
     let t = await transactionService.fetchById(id);
     if (t) {
-      const p = paymentService.getForTransaction(t.id);
+      if (t.listingId) {
+        const l = await supplyService.fetchById(t.listingId);
+        setListing(l);
+      }
+      let p = paymentService.getForTransaction(t.id);
       const j = logisticsService.getForTransaction(t.id);
 
+      // Handle Bachs.io payment callback parameter
+      if (searchParams.get('payment') === 'success' && session) {
+        if (!p) {
+          p = await paymentService.initiate({
+            transactionId: t.id,
+            payerId: session.userId,
+            payerName: session.name,
+            amount: t.totalAmount,
+            currency: t.currency || 'NGN',
+          });
+        }
+        if (p && p.status !== 'CONFIRMED') {
+          await paymentService.confirm(p.id, session.userId, session.name);
+          toast('success', 'Bachs.io Payment Confirmed! Funds are locked in escrow.');
+          const updated = await transactionService.fetchById(id);
+          if (updated) {
+            t = updated;
+            p = paymentService.getForTransaction(t.id);
+          }
+          refreshNotifications();
+        }
+      }
+
       // Auto-synchronize transaction state if logistics job is further ahead
-      if (j) {
+      if (j && t) {
         const logisticsToTxnStatus: Record<string, TransactionStatus> = {
           COMPLETED: 'COMPLETED',
           DELIVERED: 'DELIVERED',
@@ -57,7 +88,7 @@ export function TransactionDetailPage() {
         const mappedStatus = logisticsToTxnStatus[j.status];
         if (mappedStatus && t.status !== mappedStatus && getPipelineIndex(mappedStatus) > getPipelineIndex(t.status)) {
           try {
-            t = await transactionService.transition({
+            const updated = await transactionService.transition({
               transactionId: t.id,
               to: mappedStatus,
               actorId: j.providerId || session?.userId || 'system',
@@ -65,20 +96,23 @@ export function TransactionDetailPage() {
               actorRole: 'logistics',
               note: `Synchronized with shipment status: ${j.status}`,
             });
+            if (updated) t = updated;
           } catch {
             // fallback gracefully
           }
         }
       }
 
-      setTxn(t);
-      setPayment(p);
-      setJob(j);
-      setAudit(auditService.getForTransaction(t.id));
+      if (t) {
+        setTxn(t);
+        setPayment(p);
+        setJob(j);
+        setAudit(auditService.getForTransaction(t.id));
+      }
     }
   };
 
-  useEffect(() => { refresh(); }, [id]);
+  useEffect(() => { refresh(); }, [id, searchParams]);
 
   if (!txn || !session) return (
     <div className="p-6 flex items-center justify-center text-gray-500">Transaction not found.</div>
@@ -348,6 +382,17 @@ export function TransactionDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Verified Supplier Media & Inspection Details */}
+          <ListingMediaViewer
+            media={listing?.media}
+            photos={listing?.photos}
+            videos={listing?.videos}
+            inspectionDetails={listing?.inspectionDetails}
+            commodityTitle={formatCommodity(txn.commodity)}
+            qualityGrade={txn.qualityGrade}
+            supplierName={txn.supplierName}
+          />
 
           {/* Counterparties */}
           <Card>

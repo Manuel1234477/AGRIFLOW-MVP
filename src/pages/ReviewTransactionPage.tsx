@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useToast } from '../components/ui/Toast';
 import { transactionService } from '../services/transactionService';
 import { supplyService } from '../services/supplyService';
+import { ListingMediaViewer } from '../components/ui/ListingMediaViewer';
 import { formatCommodity, formatCurrency } from '../utils/format';
 import type { SupplyListing } from '../types';
 
@@ -100,7 +101,7 @@ export function ReviewTransactionPage() {
             </div>
           </div>
 
-          {/* Goods Card */}
+            {/* Goods Card */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
               Goods
@@ -124,6 +125,17 @@ export function ReviewTransactionPage() {
               </div>
             </div>
           </div>
+
+          {/* Supplier Media & Batch Inspection Verification */}
+          <ListingMediaViewer
+            media={listing?.media}
+            photos={listing?.photos}
+            videos={listing?.videos}
+            inspectionDetails={listing?.inspectionDetails}
+            commodityTitle={listing ? formatCommodity(listing.commodity) : 'Produce'}
+            qualityGrade={listing?.qualityGrade}
+            supplierName={supplierName}
+          />
 
           {/* Logistics & Delivery Card */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">

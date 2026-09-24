@@ -103,6 +103,21 @@ function normalizeTransaction(raw: any): Transaction {
 }
 
 export const transactionService = {
+  // Syncs the local transaction cache from a response another service
+  // already fetched (e.g. paymentService's confirm/fail calls, which get a
+  // TransactionWithHistory back from their own endpoint) -- avoids a
+  // redundant re-fetch just to update local state.
+  applyServerTransaction(raw: any): Transaction {
+    const rawTx = raw.transaction ? { ...raw.transaction, history: raw.history } : raw;
+    const txn = normalizeTransaction(rawTx);
+    const all = storageService.get<Transaction[]>(STORE_KEYS.TRANSACTIONS) ?? [];
+    const idx = all.findIndex((t) => t.id === txn.id);
+    if (idx >= 0) all[idx] = txn;
+    else all.unshift(txn);
+    storageService.set(STORE_KEYS.TRANSACTIONS, all);
+    return txn;
+  },
+
   async fetchAll(): Promise<Transaction[]> {
     try {
       const data = await apiFetch<any[]>('/api/transactions');

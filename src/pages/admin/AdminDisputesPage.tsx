@@ -55,7 +55,7 @@ export function AdminDisputesPage() {
         toast('info', `On-chain refund submitted: ${hash.slice(0, 10)}...`);
       }
 
-      // Always update localStorage state
+      // Update dispute record state via dispute service
       await disputeService.resolve({
         disputeId: resolving.id,
         adminId: session.userId,

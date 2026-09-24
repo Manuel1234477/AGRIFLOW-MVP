@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { VerifiedBadge } from '../components/ui/VerifiedBadge';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
+import { ListingMediaViewer } from '../components/ui/ListingMediaViewer';
 import { formatCurrency, formatDate, formatCommodity, COMMODITY_ICONS } from '../utils/format';
 import type { SupplyListing, DemandRequest, Match } from '../types';
 
@@ -171,6 +172,18 @@ export function SupplyDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Media & Inspection Proof */}
+          <ListingMediaViewer
+            media={listing.media}
+            photos={listing.photos}
+            videos={listing.videos}
+            inspectionDetails={listing.inspectionDetails}
+            commodityTitle={formatCommodity(listing.commodity)}
+            qualityGrade={listing.qualityGrade}
+            supplierName={listing.supplierName}
+            isVerifiedSupplier={listing.supplierVerified}
+          />
 
           {/* Supplier */}
           <Card>

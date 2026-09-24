@@ -119,8 +119,20 @@ export function Navbar() {
 
           {/* Right: Notifications & User Menu */}
           <div className="flex items-center gap-3">
-            <div className="hidden sm:block">
+            <div className="hidden sm:flex items-center gap-2">
               <LanguageSwitcher />
+              <button
+                type="button"
+                onClick={() => {
+                  const widgetBtn = document.querySelector<HTMLButtonElement>('#speech-widget button');
+                  if (widgetBtn) widgetBtn.click();
+                }}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-2xs cursor-pointer transition-all"
+                title="Listen to page / Mai karatu (Audio)"
+              >
+                <span className="text-emerald-600">🔊</span>
+                <span className="hidden lg:inline">Listen</span>
+              </button>
             </div>
             <NavLink
               to="/app/notifications"

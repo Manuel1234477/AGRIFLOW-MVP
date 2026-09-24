@@ -38,7 +38,27 @@ export interface Commodity {
   unit: 'tonnes' | 'kg' | 'bags';
 }
 
-// ─── Supply Listing ───────────────────────────────────────────────────────────
+// ─── Supply Listing Media & Inspection ───────────────────────────────────────
+
+export interface ListingMedia {
+  id: string;
+  type: 'image' | 'video';
+  url: string;
+  name: string;
+  size?: number;
+  thumbnailUrl?: string;
+  caption?: string;
+  uploadedAt?: string;
+}
+
+export interface InspectionDetails {
+  moistureContent?: string;
+  packagingType?: string;
+  harvestDate?: string;
+  storageType?: string;
+  certifications?: string[];
+  batchNumber?: string;
+}
 
 export type ListingStatus = 'active' | 'inactive' | 'sold' | 'pending_review';
 
@@ -57,6 +77,9 @@ export interface SupplyListing {
   availabilityDate: string;
   description: string;
   photos?: string[];
+  videos?: string[];
+  media?: ListingMedia[];
+  inspectionDetails?: InspectionDetails;
   status: ListingStatus;
   createdAt: string;
   updatedAt: string;
@@ -177,6 +200,10 @@ export interface Payment {
   currency: string;
   provider: string;
   providerReference?: string;
+  paymentMethod?: 'bachs' | 'stellar' | 'bank' | 'card' | 'other';
+  bachsCheckoutSessionId?: string;
+  bachsCheckoutUrl?: string;
+  bachsPaymentStatus?: string;
   status: PaymentStatus;
   failureReason?: string;
   createdAt: string;

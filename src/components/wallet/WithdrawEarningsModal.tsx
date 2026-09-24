@@ -6,6 +6,7 @@ import { Input } from '../ui/Input';
 import { useToast } from '../ui/Toast';
 import { walletService, type WalletSummary } from '../../services/walletService';
 import { formatCurrency } from '../../utils/format';
+import { useUsdcNgnRate } from '../../services/fxRateService';
 import { getWalletKey, connectWallet } from '../../lib/stellar';
 
 interface Props {
@@ -28,6 +29,7 @@ export function WithdrawEarningsModal({
   onSuccess,
 }: Props) {
   const { toast } = useToast();
+  const { rate: usdcRate } = useUsdcNgnRate();
   const [method, setMethod] = useState<'bank_transfer' | 'stellar_usdc'>('bank_transfer');
   const [amount, setAmount] = useState<string>(summary.available > 0 ? String(summary.available) : '');
   const [bankName, setBankName] = useState('First Bank of Nigeria');
@@ -38,7 +40,7 @@ export function WithdrawEarningsModal({
   const [error, setError] = useState<string | null>(null);
 
   const numAmount = parseFloat(amount) || 0;
-  const usdcEquivalent = (numAmount / 1350).toFixed(2);
+  const usdcEquivalent = (numAmount / usdcRate).toFixed(2);
 
   const handleConnectStellar = async () => {
     try {

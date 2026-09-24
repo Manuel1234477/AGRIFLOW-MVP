@@ -5,6 +5,7 @@ use crate::error::{AppError, AppResult};
 use crate::ids;
 use crate::models::user::{AuthResponse, LoginRequest, RegisterRequest, User, UserPublic, UserRole};
 use crate::state::AppState;
+use crate::validation::is_valid_email;
 
 const ADMIN_KEY_HEADER: &str = "x-admin-registration-key";
 
@@ -15,6 +16,9 @@ pub async fn register(
 ) -> AppResult<Json<AuthResponse>> {
     if body.name.trim().is_empty() || body.email.trim().is_empty() {
         return Err(AppError::BadRequest("Name and email are required.".into()));
+    }
+    if !is_valid_email(&body.email) {
+        return Err(AppError::BadRequest("Enter a valid email address.".into()));
     }
     // Admins can't sign themselves up: registering one requires the
     // server-side ADMIN_REGISTRATION_KEY (used by seed scripts and tests).
@@ -48,28 +52,45 @@ pub async fn register(
         ));
     }
 
-    let id = ids::user_id(&body.role.to_string());
     let password_hash = hash_password(&body.password)?;
     let org_name = body.organization_name.clone().or_else(|| Some(body.name.clone()));
 
-    let user = sqlx::query_as!(
-        User,
-        r#"
-        INSERT INTO users (id, email, password_hash, name, role, organization_name, phone, location, verified, profile_complete)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, TRUE)
-        RETURNING id, email, password_hash, name, role as "role: _", organization_name, phone, location, verified, profile_complete, created_at, updated_at
-        "#,
-        id,
-        body.email,
-        password_hash,
-        body.name,
-        body.role as _,
-        org_name,
-        body.phone,
-        body.location,
-    )
-    .fetch_one(&state.db)
-    .await?;
+    let mut user = None;
+    for _ in 0..ids::MAX_ID_ATTEMPTS {
+        let id = ids::user_id(&body.role.to_string());
+        match sqlx::query_as!(
+            User,
+            r#"
+            INSERT INTO users (id, email, password_hash, name, role, organization_name, phone, location, verified, profile_complete)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, TRUE)
+            RETURNING id, email, password_hash, name, role as "role: _", organization_name, phone, location, verified, profile_complete, created_at, updated_at
+            "#,
+            id,
+            body.email,
+            password_hash,
+            body.name,
+            body.role as _,
+            org_name,
+            body.phone,
+            body.location,
+        )
+        .fetch_one(&state.db)
+        .await
+        {
+            Ok(u) => {
+                user = Some(u);
+                break;
+            }
+            Err(e) if ids::is_id_collision(&e) => continue,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    let user = user.ok_or_else(|| {
+        AppError::Internal(anyhow::anyhow!(
+            "failed to generate a unique user id after {} attempts",
+            ids::MAX_ID_ATTEMPTS
+        ))
+    })?;
 
     let token = issue_token(
         &state.config.jwt_secret,

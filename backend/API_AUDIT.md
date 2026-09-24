@@ -28,22 +28,39 @@ be treated as a punch list.
 
 ## Required changes (blocking)
 
-### 1. Four endpoints require no authentication at all
+### 1. Four endpoints require no authentication at all — ✅ FIXED (2026-09-24)
 `GET /listings`, `GET /listings/{id}`, `GET /demands`, `GET /demands/{id}`.
-Flagged as undesirable for this product. Fix: add the `auth: AuthUser`
-extractor to all four handlers in `src/routes/listings.rs` /
-`src/routes/demands.rs` (same pattern every other handler already uses),
-decide the intended role scope, and update the API surface table in
-`README.md` once changed.
+Flagged as undesirable for this product. Fixed by adding the `auth:
+AuthUser` extractor to all four handlers — any authenticated role (buyer,
+supplier, logistics, admin) can now browse, but an anonymous caller gets
+`401 Missing Authorization header.`. No role restriction beyond "must be
+logged in," since both buyers and suppliers legitimately need to browse
+both listings and demands. Verified: unauthenticated requests to all four
+routes now 401; authenticated requests (any role) succeed unchanged.
+See the updated API surface table in `README.md`.
 
-### 2. Decimal fields serialize as JSON strings, not numbers
-`quantity`, `pricePerUnit`, `totalAmount`, and `indicativeBudget` all come
-back as `"20"` instead of `20` (a `rust_decimal::Decimal` default). The
-frontend's `src/types/index.ts` declares these fields as `number` — wired
-up as-is, arithmetic on them will silently string-concatenate or produce
-`NaN`. Fix: serialize `Decimal` as a JSON number (e.g. via
-`rust_decimal::serde::float`), or explicitly document that every consumer
-must `parseFloat()` on receipt.
+A resource-key-based gate (a secret issued by the backend, separate from
+user login) was considered and deliberately rejected in favor of this
+simpler fix — see discussion history for the reasoning: a statically
+embedded key in a public SPA build is trivially extractable from the
+browser bundle regardless of expiry, and a dynamically-issued key with no
+credential check on issuance doesn't stop scripted abuse either. User-role
+gating was judged sufficient for now.
+
+### 2. Decimal fields serialize as JSON strings, not numbers — ✅ FIXED (2026-09-24)
+`quantity`, `pricePerUnit`, `totalAmount`, and `indicativeBudget` all came
+back as `"20"` instead of `20` (a `rust_decimal::Decimal` default). Fixed
+by enabling the `serde-with-float` feature on `rust_decimal` and annotating
+every response-facing `Decimal` field (`SupplyListing`, `DemandRequest`,
+`Transaction`) with `#[serde(with = "rust_decimal::serde::float")]`. Only
+the *response* side was changed — request DTOs (`CreateListingRequest`,
+`CreateDemandRequest`, `CreateTransactionRequest`, `UpdateListingRequest`)
+were left on the default (flexible) `Decimal` deserializer, since they
+already accepted numbers correctly and nothing needed fixing there.
+Verified: `GET /listings`, `/demands`, `/transactions` now return unquoted
+JSON numbers; `POST /listings` still accepts and round-trips correctly.
+The frontend's `apiMappers.ts` coercion (`num()`) is unaffected — it
+already tolerates receiving real numbers instead of strings.
 
 ### 3. The trade lifecycle dead-ends at `PAYMENT_PENDING`
 Confirmed structurally, not just by the "not built yet" note in
@@ -53,28 +70,67 @@ client — not even admin — can move a transaction past payment-pending
 today. Nothing downstream (logistics, delivery, completion) is reachable
 until a payment/webhook endpoint exists.
 
-### 4. Entity ID generation has an unhandled collision window
+### 4. Entity ID generation has an unhandled collision window — ✅ FIXED (2026-09-24)
 `src/ids.rs::generate()` draws a random 5-digit suffix (`10_000..99_999`,
 ~90,000 values) with no collision check or retry, and that value is the
 literal `TEXT PRIMARY KEY` for users, listings, demands, and transactions.
 By the birthday paradox, ~375 inserts of one entity type give roughly 50%
 odds of a collision, which would surface as a raw, unhandled `500 A
-database error occurred.` A 500-request rapid listing-creation stress test
-came back clean (zero collisions) — that's luck, not a guarantee, and isn't
-evidence the risk is safe to ignore. Fix: switch to UUIDs, or add a
-uniqueness check + retry loop around ID generation.
+database error occurred.`
 
-### 5. Input validation is inconsistent between near-identical fields
-- `pricePerUnit` on listings rejects negative values; `indicativeBudget` on
-  demands does **not** — `-999999` was accepted with `200 OK`.
-- Empty strings are accepted for `commodity`, `unit`, `qualityGrade`, and
-  `location` on both listings and demands (a listing with `commodity: ""`
-  was created successfully).
-- Email format is not validated on register — `"not-an-email"` was accepted
-  as a valid email.
+Fixed with a retry loop (not a switch to UUIDs — `README.md` explicitly
+documents the human-readable id format as intentional, and a retry loop
+preserves it without that larger, more disruptive change). Added
+`ids::MAX_ID_ATTEMPTS` (5) and `ids::is_id_collision(&sqlx::Error)`, which
+checks specifically for a Postgres unique-violation on a table's
+auto-generated `<table>_pkey` constraint (as opposed to, say,
+`users_email_key`, which no amount of retrying with a new id would ever
+resolve). All four id-assigning inserts (`auth::register`,
+`listings::create`, `demands::create`, `transactions::create`) now loop:
+generate an id, attempt the insert, regenerate and retry on a PK collision,
+propagate any other error immediately, and return a clean `500` (logged
+server-side with detail, generic message to the client) if genuinely
+exhausted after 5 attempts. `transactions::create`'s case is the trickiest,
+since it holds an open DB transaction across two inserts (the transaction
+row, then its first history event) -- a collision there drops the whole
+`tx` (Postgres aborts a transaction after any failed statement in it, so
+partial retry isn't possible) and starts a fresh one for the next attempt.
 
-Fix: apply the same validation consistently across listing and demand
-creation, and add basic email-format and non-empty-string checks.
+Verified empirically, not just by inspection: temporarily shrank the id
+space to 3 possible values, then created listings against it. The first
+three succeeded with three distinct ids (proving the retry loop actually
+regenerates on collision), and a fourth attempt -- genuinely impossible,
+no free ids left -- failed cleanly with `500 An internal error occurred.`
+instead of hanging, crashing, or silently creating a duplicate; the server
+log correctly recorded `failed to generate a unique listing id after 5
+attempts` without leaking that detail to the client. Restored the real id
+space afterward and re-ran an end-to-end check across all four entity
+types. `cargo test` passes.
+
+### 5. Input validation is inconsistent between near-identical fields — ✅ FIXED (2026-09-24)
+- `pricePerUnit` on listings rejected negative values; `indicativeBudget` on
+  demands did **not** — `-999999` was accepted with `200 OK`.
+- Empty strings were accepted for `commodity`, `unit`, `qualityGrade`, and
+  `location`/`destinationLocation` on both listings and demands (a listing
+  with `commodity: ""` was created successfully).
+- Email format was not validated on register — `"not-an-email"` was
+  accepted as a valid email.
+
+Fixed with a new shared `src/validation.rs` module (`require_non_empty`,
+`is_valid_email`) instead of each handler inventing its own version of the
+check:
+- `demands::create` now rejects a negative `indicativeBudget`, matching
+  `listings::create`'s existing `pricePerUnit` check.
+- Both `listings::create` and `demands::create` now reject blank
+  `commodity`, `unit`, `qualityGrade`, and `location`/`destinationLocation`.
+- `auth::register` now rejects an email without an `@`, a non-empty local
+  part, and a domain containing a `.` (deliberately permissive — not full
+  RFC 5322 validation, just enough to catch obviously-invalid input).
+
+Verified: all four previously-accepted invalid inputs now return `400`
+with a clear message; valid listings, demands, and registrations are
+unaffected. Two new unit tests for `is_valid_email` plus the existing
+suite all pass (`cargo test`, 8 tests).
 
 ### 6. Error response shape is inconsistent
 Hand-written `AppError` responses return `{"error": "..."}` with correct

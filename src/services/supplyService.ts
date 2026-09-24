@@ -1,4 +1,4 @@
-import type { SupplyListing, ListingStatus, CommodityType, QualityGrade } from '../types';
+import type { SupplyListing, ListingStatus, CommodityType, QualityGrade, ListingMedia, InspectionDetails } from '../types';
 import { apiFetch } from '../lib/api';
 import { storageService, STORE_KEYS } from './storageService';
 import { auditService } from './auditService';
@@ -19,6 +19,9 @@ function normalizeListing(raw: any): SupplyListing {
     availabilityDate: raw.availabilityDate || raw.availability_date || new Date().toISOString(),
     description: raw.description || '',
     photos: raw.photos || undefined,
+    videos: raw.videos || undefined,
+    media: raw.media || undefined,
+    inspectionDetails: raw.inspectionDetails || undefined,
     status: (raw.status || 'active').toLowerCase() as ListingStatus,
     createdAt: raw.createdAt || raw.created_at || new Date().toISOString(),
     updatedAt: raw.updatedAt || raw.updated_at || new Date().toISOString(),
@@ -71,6 +74,9 @@ export const supplyService = {
     availabilityDate: string;
     description: string;
     photos?: string[];
+    videos?: string[];
+    media?: ListingMedia[];
+    inspectionDetails?: InspectionDetails;
   }): Promise<SupplyListing> {
     try {
       const data = await apiFetch<any>('/api/listings', {
@@ -88,7 +94,13 @@ export const supplyService = {
         }),
       });
 
-      const listing = normalizeListing({ ...data, photos: params.photos });
+      const listing = normalizeListing({
+        ...data,
+        photos: params.photos,
+        videos: params.videos,
+        media: params.media,
+        inspectionDetails: params.inspectionDetails,
+      });
       const all = storageService.get<SupplyListing[]>(STORE_KEYS.LISTINGS) ?? [];
       all.unshift(listing);
       storageService.set(STORE_KEYS.LISTINGS, all);

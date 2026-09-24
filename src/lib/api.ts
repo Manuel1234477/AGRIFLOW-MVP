@@ -1,4 +1,11 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'https://agriflow-api-production.up.railway.app';
+// No env var set: use a same-origin relative path, not a hardcoded
+// production URL. `npm run dev` proxies /api to the local backend (see
+// vite.config.ts), and the deployed frontend's /api is rewritten to the
+// Railway backend by vercel.json -- hardcoding production here meant local
+// dev silently talked to production instead of using either of those
+// already-configured proxies. Set VITE_API_URL explicitly to override
+// (e.g. for a preview host with no /api rewrite configured).
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;

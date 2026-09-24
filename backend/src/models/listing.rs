@@ -20,9 +20,11 @@ pub struct SupplyListing {
     pub supplier_name: String,
     pub supplier_verified: bool,
     pub commodity: String,
+    #[serde(with = "rust_decimal::serde::float")]
     pub quantity: Decimal,
     pub unit: String,
     pub quality_grade: String,
+    #[serde(with = "rust_decimal::serde::float")]
     pub price_per_unit: Decimal,
     pub currency: String,
     pub location: String,

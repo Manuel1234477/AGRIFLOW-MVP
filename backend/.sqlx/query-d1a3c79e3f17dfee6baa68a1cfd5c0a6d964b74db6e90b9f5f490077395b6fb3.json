@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE payments SET\n                 status = 'CONFIRMED',\n                 provider = COALESCE($2, provider),\n                 provider_reference = $3,\n                 stellar_tx_hash = COALESCE($4, stellar_tx_hash),\n                 completed_at = COALESCE(completed_at, now()),\n                 updated_at = now()\n               WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d1a3c79e3f17dfee6baa68a1cfd5c0a6d964b74db6e90b9f5f490077395b6fb3"
+}

@@ -169,7 +169,7 @@ export function MatchResultsPage() {
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-bold text-gray-900">{supplier.name}</h3>
                   {supplier.isBestMatch && (
-                    <span className="text-[10px] font-semibold tracking-wider px-2 py-0.5 rounded-full bg-agri-50 text-agri-800 border border-agri-200">
+                    <span className="text-[10px] font-semibold tracking-wider px-2 py-0.5 rounded-full bg-green-50 text-green-800 border border-green-200">
                       BEST MATCH
                     </span>
                   )}
@@ -205,7 +205,7 @@ export function MatchResultsPage() {
                 <button
                   type="button"
                   onClick={() => handleSelectSupplier(supplier)}
-                  className="px-4 py-2 text-xs font-medium text-white bg-agri-700 hover:bg-agri-800 rounded-lg transition-colors shadow-xs"
+                  className="px-4 py-2 text-xs font-medium text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs"
                 >
                   Select
                 </button>

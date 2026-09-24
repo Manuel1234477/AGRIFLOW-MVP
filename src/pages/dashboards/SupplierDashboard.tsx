@@ -1,27 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Package, Clock, CheckCircle2, ArrowRightLeft, Truck } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Plus } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { transactionService } from '../../services/transactionService';
 import { supplyService } from '../../services/supplyService';
-import { Button } from '../../components/ui/Button';
-import { Card, CardContent } from '../../components/ui/Card';
-import { StatusBadge } from '../../components/ui/StatusBadge';
-import { EmptyState } from '../../components/ui/EmptyState';
-import { formatCurrency, formatCommodity } from '../../utils/format';
 import { EscrowEarningsCard } from '../../components/wallet/EscrowEarningsCard';
+import { formatCurrency, formatCommodity } from '../../utils/format';
 import type { Transaction, SupplyListing } from '../../types';
 
-function StatCard({ label, value, icon, color }: { label: string; value: number; icon: React.ReactNode; color: string }) {
-  return (
-    <div className={`rounded-xl p-4 border ${color}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium opacity-80">{label}</span>
-        <div className="opacity-60">{icon}</div>
-      </div>
-      <div className="text-3xl font-bold">{value}</div>
-    </div>
-  );
+function greeting(name: string) {
+  const h = new Date().getHours();
+  const time = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  const first = name.split(' ')[0];
+  return `${time}, ${first}.`;
 }
 
 export function SupplierDashboard() {
@@ -29,7 +20,7 @@ export function SupplierDashboard() {
   const navigate = useNavigate();
   const [listings, setListings] = useState<SupplyListing[]>([]);
   const [allTxns, setAllTxns] = useState<Transaction[]>([]);
-  const [_loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -46,34 +37,57 @@ export function SupplierDashboard() {
     }
   }, [session]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   if (!session) return null;
 
   const activeListings = listings.filter((l) => l.status === 'active').length;
   const pending = allTxns.filter((t) => t.status === 'PENDING' || t.status === 'PENDING_SUPPLIER_ACCEPTANCE').length;
-  const accepted = allTxns.filter((t) => t.status === 'ACCEPTED').length;
-  const awaitingPayment = allTxns.filter((t) => ['PAYMENT_PENDING', 'PAYMENT_CONFIRMED'].includes(t.status)).length;
-  const inFulfilment = allTxns.filter((t) => ['LOGISTICS_PENDING','LOGISTICS_ASSIGNED','LOGISTICS_ACCEPTED','READY_FOR_PICKUP','PICKED_UP','IN_TRANSIT'].includes(t.status)).length;
+  const inFulfilment = allTxns.filter((t) =>
+    ['LOGISTICS_PENDING','LOGISTICS_ASSIGNED','LOGISTICS_ACCEPTED','READY_FOR_PICKUP','PICKED_UP','IN_TRANSIT'].includes(t.status)
+  ).length;
   const completed = allTxns.filter((t) => t.status === 'COMPLETED').length;
 
-  const recentTxns = [...allTxns].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 5);
+  const recentTxns = [...allTxns]
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 6);
+
+  const getStatusBadge = (status: string) => {
+    const map: Record<string, string> = {
+      PAYMENT_PENDING: 'status-pill status-pill-amber',
+      PAYMENT_CONFIRMED: 'status-pill status-pill-green',
+      IN_TRANSIT: 'status-pill status-pill-blue',
+      BUYER_CONFIRMATION_PENDING: 'status-pill status-pill-purple',
+      DELIVERED: 'status-pill status-pill-purple',
+      COMPLETED: 'status-pill status-pill-green',
+      PENDING: 'status-pill status-pill-gray',
+      PENDING_SUPPLIER_ACCEPTANCE: 'status-pill status-pill-amber',
+    };
+    return <span className={map[status] ?? 'status-pill status-pill-gray'}>{status.replace(/_/g, '_')}</span>;
+  };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-start justify-between mb-6">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Supplier Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{session.name} · Northern operations</p>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+            {loading ? 'Dashboard' : greeting(session.name)}
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {loading ? 'Loading…' : `${activeListings} active listing${activeListings !== 1 ? 's' : ''} · ${pending} pending request${pending !== 1 ? 's' : ''}`}
+          </p>
         </div>
-        <Button icon={<Plus className="w-4 h-4" />} onClick={() => navigate('/app/supply/new')}>
+        <button
+          onClick={() => navigate('/app/supply/new')}
+          className="inline-flex items-center gap-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors"
+        >
+          <Plus size={15} />
           Create Supply Listing
-        </Button>
+        </button>
       </div>
 
-      {/* Escrow Earnings & Withdrawal Payouts */}
+      {/* Escrow earnings */}
       <EscrowEarningsCard
         userId={session.userId}
         userName={session.name}
@@ -81,85 +95,121 @@ export function SupplierDashboard() {
         onUpdated={load}
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-        <StatCard label="Active Listings" value={activeListings} icon={<Package className="w-4 h-4" />} color="bg-agri-50 border-agri-200 text-agri-900" />
-        <StatCard label="Pending Requests" value={pending} icon={<Clock className="w-4 h-4" />} color="bg-amber-50 border-amber-200 text-amber-900" />
-        <StatCard label="Accepted" value={accepted} icon={<CheckCircle2 className="w-4 h-4" />} color="bg-blue-50 border-blue-200 text-blue-900" />
-        <StatCard label="Awaiting Payment" value={awaitingPayment} icon={<ArrowRightLeft className="w-4 h-4" />} color="bg-orange-50 border-orange-200 text-orange-900" />
-        <StatCard label="In Fulfilment" value={inFulfilment} icon={<Truck className="w-4 h-4" />} color="bg-violet-50 border-violet-200 text-violet-900" />
-        <StatCard label="Completed" value={completed} icon={<CheckCircle2 className="w-4 h-4" />} color="bg-emerald-50 border-emerald-200 text-emerald-900" />
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Active listings', value: activeListings },
+          { label: 'Pending requests', value: pending },
+          { label: 'In fulfilment', value: inFulfilment },
+          { label: 'Completed orders', value: completed },
+        ].map(({ label, value }) => (
+          <div key={label} className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-xs">
+            <div className="text-xs text-gray-500 font-medium">{label}</div>
+            <div className="text-2xl font-bold text-gray-900 mt-2">{value}</div>
+          </div>
+        ))}
       </div>
 
+      {/* Pending alert */}
       {pending > 0 && (
-        <div className="mb-6 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-amber-600" />
-            <p className="text-sm font-medium text-amber-800">
-              {pending} transaction request{pending > 1 ? 's' : ''} awaiting your review
-            </p>
-          </div>
-          <Button size="sm" variant="warning" onClick={() => navigate('/app/transactions')}>Review Now</Button>
+        <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between">
+          <p className="text-sm font-medium text-amber-800">
+            {pending} transaction request{pending > 1 ? 's' : ''} awaiting your review
+          </p>
+          <Link
+            to="/app/transactions"
+            className="text-xs font-semibold text-amber-800 hover:text-amber-900 underline"
+          >
+            Review now →
+          </Link>
         </div>
       )}
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <Card>
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-800">Transaction Requests</h2>
-            <button onClick={() => navigate('/app/transactions')} className="text-xs text-agri-600 font-medium hover:text-agri-700">View all</button>
-          </div>
-          <CardContent className="p-0">
-            {recentTxns.length === 0 ? (
-              <EmptyState title="No requests yet" description="Publish supply listings to receive transaction requests." />
-            ) : (
-              <div className="divide-y divide-gray-50">
-                {recentTxns.map((t) => (
-                  <div key={t.id} onClick={() => navigate(`/app/transactions/${t.id}`)} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50 cursor-pointer">
-                    <div>
-                      <div className="text-xs font-mono text-gray-400 mb-0.5">{t.id}</div>
-                      <div className="text-sm font-medium text-gray-800">{formatCommodity(t.commodity)}</div>
-                      <div className="text-xs text-gray-500">{t.quantity} {t.unit} · {t.buyerName}</div>
-                    </div>
-                    <div className="text-right">
-                      <StatusBadge status={t.status} size="sm" />
-                      <div className="text-xs text-gray-500 mt-1">{formatCurrency(t.totalAmount)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Recent activity table */}
+      <div className="bg-white rounded-xl border border-gray-200/80 shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-gray-700">Recent Activity</h2>
+          <Link to="/app/transactions" className="text-xs font-semibold text-gray-600 hover:text-gray-900">
+            View all →
+          </Link>
+        </div>
 
-        <Card>
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-800">My Supply Listings</h2>
-            <button onClick={() => navigate('/app/supply/manage')} className="text-xs text-agri-600 font-medium hover:text-agri-700">Manage</button>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-gray-50/75 border-b border-gray-200 text-gray-500 font-medium">
+              <tr>
+                <th className="px-6 py-3.5">Transaction</th>
+                <th className="px-6 py-3.5">Commodity</th>
+                <th className="px-6 py-3.5">Buyer</th>
+                <th className="px-6 py-3.5">Amount</th>
+                <th className="px-6 py-3.5">State</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-gray-800">
+              {recentTxns.length > 0 ? (
+                recentTxns.map((tx) => (
+                  <tr
+                    key={tx.id}
+                    onClick={() => navigate(`/app/transactions/${tx.id}`)}
+                    className="hover:bg-gray-50/50 transition-colors cursor-pointer"
+                  >
+                    <td className="px-6 py-4 font-semibold text-gray-900 font-mono">{tx.id}</td>
+                    <td className="px-6 py-4 text-gray-600 font-medium">
+                      {formatCommodity(tx.commodity)} · {tx.quantity} {tx.unit}
+                    </td>
+                    <td className="px-6 py-4 text-gray-600">{tx.buyerName}</td>
+                    <td className="px-6 py-4 text-gray-700 font-medium">{formatCurrency(tx.totalAmount)}</td>
+                    <td className="px-6 py-4">{getStatusBadge(tx.status)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                    {loading
+                      ? 'Loading activity…'
+                      : 'No transactions yet. Create a supply listing to start receiving requests.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Supply listings preview */}
+      <div className="bg-white rounded-xl border border-gray-200/80 shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-gray-700">My Supply Listings</h2>
+          <Link to="/app/supply/manage" className="text-xs font-semibold text-gray-600 hover:text-gray-900">
+            Manage →
+          </Link>
+        </div>
+        {listings.length === 0 ? (
+          <div className="px-6 py-12 text-center text-gray-400 text-sm">
+            No listings yet. Create a supply listing to start receiving requests.
           </div>
-          <CardContent className="p-0">
-            {listings.length === 0 ? (
-              <EmptyState title="No listings yet" description="Create a supply listing to start receiving requests." />
-            ) : (
-              <div className="divide-y divide-gray-50">
-                {listings.slice(0, 5).map((l) => (
-                  <div key={l.id} className="px-5 py-3 flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-medium text-gray-800">{formatCommodity(l.commodity)}</div>
-                      <div className="text-xs text-gray-500">{l.quantity} {l.unit} · Grade {l.qualityGrade} · {l.location}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs font-medium text-gray-700">{formatCurrency(l.pricePerUnit)}/{l.unit}</div>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full mt-1 inline-block font-medium
-                        ${l.status === 'active' ? 'bg-agri-100 text-agri-700' : 'bg-gray-100 text-gray-600'}`}>
-                        {l.status}
-                      </span>
-                    </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {listings.slice(0, 5).map((l) => (
+              <div key={l.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
+                <div>
+                  <div className="text-sm font-medium text-gray-800">{formatCommodity(l.commodity)}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    {l.quantity} {l.unit} · Grade {l.qualityGrade} · {l.location}
                   </div>
-                ))}
+                </div>
+                <div className="text-right">
+                  <div className="text-xs font-semibold text-gray-700">{formatCurrency(l.pricePerUnit)}/{l.unit}</div>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full mt-1 inline-block font-medium ${
+                    l.status === 'active' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {l.status}
+                  </span>
+                </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

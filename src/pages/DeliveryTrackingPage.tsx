@@ -108,7 +108,7 @@ export function DeliveryTrackingPage() {
 
         {allDeliverables.length > 1 && (
           <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-xs">
-            <Truck className="w-3.5 h-3.5 text-agri-700 shrink-0" />
+            <Truck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
             <label htmlFor="deliverable-select" className="text-xs font-semibold text-gray-700 whitespace-nowrap">
               Switch Deliverable:
             </label>
@@ -142,7 +142,7 @@ export function DeliveryTrackingPage() {
             <button
               type="button"
               onClick={() => navigate(`/app/transactions/${tx?.id}/confirm`)}
-              className="px-3 py-1.5 text-xs font-semibold text-white bg-agri-700 hover:bg-agri-800 rounded-lg shadow-xs cursor-pointer"
+              className="px-3 py-1.5 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg shadow-xs cursor-pointer"
             >
               Confirm Receipt & Release Escrow
             </button>
@@ -175,7 +175,7 @@ export function DeliveryTrackingPage() {
                       <div
                         className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${
                           isLatest
-                            ? 'bg-agri-700 ring-4 ring-agri-100'
+                            ? 'bg-gray-900 ring-4 ring-gray-100'
                             : 'bg-gray-800'
                         }`}
                       />
@@ -202,7 +202,7 @@ export function DeliveryTrackingPage() {
             ) : (
               <div className="space-y-4 text-xs">
                 <div className="flex items-start gap-3">
-                  <div className="w-2.5 h-2.5 rounded-full bg-agri-700 ring-4 ring-agri-100 mt-1 shrink-0" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-gray-900 ring-4 ring-gray-100 mt-1 shrink-0" />
                   <div>
                     <div className="font-bold text-gray-900">{tx?.status || 'IN_TRANSIT'}</div>
                     <div className="text-gray-600 mt-0.5">Consignment active on transit route.</div>
@@ -222,7 +222,7 @@ export function DeliveryTrackingPage() {
             </h2>
 
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-agri-50 border border-agri-200 flex items-center justify-center font-bold text-agri-800">
+              <div className="w-9 h-9 rounded-lg bg-green-50 border border-green-200 flex items-center justify-center font-bold text-gray-900">
                 {carrierName.charAt(0).toUpperCase()}
               </div>
               <div>

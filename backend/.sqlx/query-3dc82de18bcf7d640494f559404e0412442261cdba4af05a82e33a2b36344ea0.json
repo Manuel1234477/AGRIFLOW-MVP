@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO users (id, email, password_hash, name, role, organization_name, phone, location, verified, profile_complete)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, TRUE)\n        RETURNING id, email, password_hash, name, role as \"role: _\", organization_name, phone, location, verified, profile_complete, created_at, updated_at\n        ",
+  "query": "\n        SELECT id, email, password_hash, name, role as \"role: _\", organization_name, phone, location, verified, profile_complete, created_at, updated_at\n        FROM users\n        WHERE ($1::text IS NULL OR role = $1)\n          AND ($2::text IS NULL\n               OR name ILIKE '%' || $2 || '%'\n               OR email ILIKE '%' || $2 || '%'\n               OR COALESCE(organization_name, '') ILIKE '%' || $2 || '%')\n        ORDER BY created_at DESC\n        LIMIT $3 OFFSET $4\n        ",
   "describe": {
     "columns": [
       {
@@ -140,12 +140,8 @@
       "Left": [
         "Text",
         "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -163,5 +159,5 @@
       false
     ]
   },
-  "hash": "1e4e6f307cb94c8119657fe4227b32bd9dfb525aaa3f3825f25181b0c539a55b"
+  "hash": "3dc82de18bcf7d640494f559404e0412442261cdba4af05a82e33a2b36344ea0"
 }

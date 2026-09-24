@@ -12,16 +12,37 @@ import { auditService } from '../services/auditService';
 import { TRANSACTION_PIPELINE, getPipelineIndex, getStatusLabel } from '../services/transactionStateMachine';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../components/ui/Toast';
-import { Button } from '../components/ui/Button';
-import { StatusBadge } from '../components/ui/StatusBadge';
-import { Card, CardContent, CardHeader } from '../components/ui/Card';
-import { Modal } from '../components/ui/Modal';
-import { Input, Textarea } from '../components/ui/Input';
 import { supplyService } from '../services/supplyService';
 import { ListingMediaViewer } from '../components/ui/ListingMediaViewer';
 import { formatCurrency, formatDate, formatDateTime, formatCommodity, COMMODITY_ICONS } from '../utils/format';
 import { CONTRACT_ID } from '../lib/stellar';
 import type { Transaction, TransactionStatus, Payment, LogisticsJob, AuditEvent, SupplyListing } from '../types';
+
+function statusPill(status: string): string {
+  const map: Record<string, string> = {
+    COMPLETED: 'status-pill status-pill-green',
+    PENDING: 'status-pill status-pill-gray',
+    PENDING_SUPPLIER_ACCEPTANCE: 'status-pill status-pill-gray',
+    ACCEPTED: 'status-pill status-pill-blue',
+    PAYMENT_PENDING: 'status-pill status-pill-amber',
+    PAYMENT_CONFIRMED: 'status-pill status-pill-green',
+    PAYMENT_FAILED: 'status-pill status-pill-red',
+    PAYMENT_CANCELLED: 'status-pill status-pill-red',
+    LOGISTICS_PENDING: 'status-pill status-pill-blue',
+    LOGISTICS_ASSIGNED: 'status-pill status-pill-blue',
+    LOGISTICS_ACCEPTED: 'status-pill status-pill-blue',
+    READY_FOR_PICKUP: 'status-pill status-pill-blue',
+    PICKED_UP: 'status-pill status-pill-blue',
+    IN_TRANSIT: 'status-pill status-pill-blue',
+    DELIVERED: 'status-pill status-pill-purple',
+    BUYER_CONFIRMATION_PENDING: 'status-pill status-pill-purple',
+    DISPUTED: 'status-pill status-pill-red',
+    CANCELLED: 'status-pill status-pill-red',
+    REJECTED: 'status-pill status-pill-red',
+    DELIVERY_FAILED: 'status-pill status-pill-red',
+  };
+  return map[status] ?? 'status-pill status-pill-gray';
+}
 
 export function TransactionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -51,7 +72,6 @@ export function TransactionDetailPage() {
       let p = paymentService.getForTransaction(t.id);
       const j = logisticsService.getForTransaction(t.id);
 
-      // Handle Bachs.io payment callback parameter
       if (searchParams.get('payment') === 'success' && session) {
         if (!p) {
           p = await paymentService.initiate({
@@ -74,7 +94,6 @@ export function TransactionDetailPage() {
         }
       }
 
-      // Auto-synchronize transaction state if logistics job is further ahead
       if (j && t) {
         const logisticsToTxnStatus: Record<string, TransactionStatus> = {
           COMPLETED: 'COMPLETED',
@@ -122,7 +141,6 @@ export function TransactionDetailPage() {
   const isSupplier = role === 'supplier' && txn.supplierId === session.userId;
   const isBuyer = role === 'buyer' && txn.buyerId === session.userId;
 
-  // Action handlers
   const handleAccept = async () => {
     setLoading(true);
     try {
@@ -156,7 +174,6 @@ export function TransactionDetailPage() {
     setPayProcessing(true);
     setShowPayModal(false);
     try {
-      // Initiate payment
       const p = await paymentService.initiate({
         transactionId: txn.id, payerId: session.userId, payerName: session.name,
         amount: txn.totalAmount, currency: txn.currency,
@@ -220,16 +237,16 @@ export function TransactionDetailPage() {
   const isTerminal = terminalStates.includes(txn.status);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto space-y-5">
       {/* Back + header */}
-      <div className="flex items-start gap-4 mb-6">
-        <button onClick={() => navigate(-1)} className="mt-1 p-1.5 hover:bg-gray-100 rounded-lg">
+      <div className="flex items-start gap-4">
+        <button type="button" onClick={() => navigate(-1)} className="mt-1 p-1.5 hover:bg-gray-100 rounded-lg">
           <ArrowLeft className="w-4 h-4 text-gray-500" />
         </button>
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-3 mb-1">
             <h1 className="text-xl font-bold text-gray-900 font-mono">{txn.id}</h1>
-            <StatusBadge status={txn.status} />
+            <span className={statusPill(txn.status)}>{txn.status.replace(/_/g, ' ')}</span>
             {CONTRACT_ID && (
               <a
                 href={`https://stellar.expert/explorer/testnet/contract/${CONTRACT_ID}`}
@@ -253,45 +270,40 @@ export function TransactionDetailPage() {
       </div>
 
       {/* Transaction progress timeline */}
-      <Card className="mb-6">
-        <CardHeader>
-          <h2 className="font-semibold text-gray-800">Transaction Progress</h2>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-0 overflow-x-auto pb-2">
-            {TRANSACTION_PIPELINE.map((step, idx) => {
-              const done = pipelineIdx > idx || (txn.status === 'COMPLETED' && idx === TRANSACTION_PIPELINE.length - 1);
-              const current = !isTerminal && pipelineIdx === idx;
-              return (
-                <div key={step} className="flex items-center gap-0 shrink-0">
-                  <div className="flex flex-col items-center">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all
-                      ${done ? 'bg-agri-600 border-agri-600 text-white' : current ? 'bg-white border-agri-500 text-agri-600' : 'bg-white border-gray-300 text-gray-400'}`}>
-                      {done ? <CheckCircle2 className="w-3.5 h-3.5" /> : current ? <Circle className="w-3.5 h-3.5 fill-agri-500" /> : <Circle className="w-3.5 h-3.5" />}
-                    </div>
-                    <div className={`text-[9px] mt-1 text-center max-w-[60px] leading-tight font-medium
-                      ${done ? 'text-agri-700' : current ? 'text-agri-600' : 'text-gray-400'}`}>
-                      {getStatusLabel(step)}
-                    </div>
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
+        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Transaction Progress</h2>
+        <div className="flex items-center gap-0 overflow-x-auto pb-2">
+          {TRANSACTION_PIPELINE.map((step, idx) => {
+            const done = pipelineIdx > idx || (txn.status === 'COMPLETED' && idx === TRANSACTION_PIPELINE.length - 1);
+            const current = !isTerminal && pipelineIdx === idx;
+            return (
+              <div key={step} className="flex items-center gap-0 shrink-0">
+                <div className="flex flex-col items-center">
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all
+                    ${done ? 'bg-gray-900 border-gray-900 text-white' : current ? 'bg-white border-gray-900 text-gray-900' : 'bg-white border-gray-300 text-gray-400'}`}>
+                    {done ? <CheckCircle2 className="w-3.5 h-3.5" /> : current ? <Circle className="w-3.5 h-3.5 fill-gray-600" /> : <Circle className="w-3.5 h-3.5" />}
                   </div>
-                  {idx < TRANSACTION_PIPELINE.length - 1 && (
-                    <div className={`h-0.5 w-8 mx-1 ${pipelineIdx > idx ? 'bg-agri-500' : 'bg-gray-200'}`} />
-                  )}
+                  <div className={`text-[9px] mt-1 text-center max-w-[60px] leading-tight font-medium
+                    ${done ? 'text-gray-700' : current ? 'text-gray-600' : 'text-gray-400'}`}>
+                    {getStatusLabel(step)}
+                  </div>
                 </div>
-              );
-            })}
+                {idx < TRANSACTION_PIPELINE.length - 1 && (
+                  <div className={`h-0.5 w-8 mx-1 ${pipelineIdx > idx ? 'bg-gray-500' : 'bg-gray-200'}`} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {isTerminal && !['COMPLETED'].includes(txn.status) && (
+          <div className="mt-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-xs text-red-700 font-medium">Transaction ended: <strong>{getStatusLabel(txn.status)}</strong></p>
           </div>
-          {isTerminal && !['COMPLETED'].includes(txn.status) && (
-            <div className="mt-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-xs text-red-700 font-medium">Transaction ended: <strong>{getStatusLabel(txn.status)}</strong></p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
       {/* Action area */}
-      <div className="mb-6">
-        {/* Supplier: accept/reject */}
+      <div className="space-y-3">
         {isSupplier && txn.status === 'PENDING' && (
           <div className="px-4 py-4 bg-amber-50 border border-amber-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -299,44 +311,68 @@ export function TransactionDetailPage() {
               <p className="text-xs text-amber-700">{txn.buyerName} has requested this transaction. Please review and respond.</p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" loading={loading} onClick={handleReject}>Reject</Button>
-              <Button loading={loading} onClick={handleAccept}>Accept Transaction</Button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleReject}
+                className="px-3 py-2 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleAccept}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
+              >
+                {loading && <Loader2 className="w-3 h-3 animate-spin" />}
+                Accept Transaction
+              </button>
             </div>
           </div>
         )}
 
-        {/* Buyer: pay */}
         {isBuyer && txn.status === 'ACCEPTED' && (
           <div className="px-4 py-4 bg-blue-50 border border-blue-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-blue-900">Payment Required</p>
               <p className="text-xs text-blue-700">Supplier has accepted. Initiate payment to proceed to logistics.</p>
             </div>
-            <Button icon={<CreditCard className="w-4 h-4" />} onClick={() => setShowPayModal(true)}>
+            <button
+              type="button"
+              onClick={() => setShowPayModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs"
+            >
+              <CreditCard className="w-3.5 h-3.5" />
               Pay {formatCurrency(txn.totalAmount)}
-            </Button>
+            </button>
           </div>
         )}
 
-        {/* Buyer: payment failed - retry */}
         {isBuyer && txn.status === 'PAYMENT_FAILED' && (
           <div className="px-4 py-4 bg-red-50 border border-red-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-red-900">Payment Failed</p>
               <p className="text-xs text-red-700">{payment?.failureReason ?? 'The payment could not be processed.'}</p>
             </div>
-            <Button icon={<CreditCard className="w-4 h-4" />} onClick={() => setShowPayModal(true)}>Retry Payment</Button>
+            <button
+              type="button"
+              onClick={() => setShowPayModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs"
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              Retry Payment
+            </button>
           </div>
         )}
 
         {payProcessing && (
           <div className="px-4 py-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center gap-3">
-            <Loader2 className="w-4 h-4 animate-spin text-agri-600" />
+            <Loader2 className="w-4 h-4 animate-spin text-gray-600" />
             <p className="text-sm text-gray-700">Processing payment...</p>
           </div>
         )}
 
-        {/* Buyer: confirm delivery */}
         {isBuyer && txn.status === 'DELIVERED' && (
           <div className="px-4 py-4 bg-teal-50 border border-teal-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -344,46 +380,54 @@ export function TransactionDetailPage() {
               <p className="text-xs text-teal-700">The logistics provider has marked this shipment as delivered. Please confirm you received it.</p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" icon={<AlertTriangle className="w-4 h-4" />} onClick={() => setShowDisputeModal(true)}>
+              <button
+                type="button"
+                onClick={() => setShowDisputeModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors"
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
                 Report Issue
-              </Button>
-              <Button loading={loading} icon={<CheckCircle2 className="w-4 h-4" />} onClick={handleConfirmDelivery}>
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleConfirmDelivery}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                 Confirm Delivery
-              </Button>
+              </button>
             </div>
           </div>
         )}
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Commercial terms */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card>
-            <CardHeader><h2 className="font-semibold text-gray-800">Commercial Terms</h2></CardHeader>
-            <CardContent>
-              <div className="grid sm:grid-cols-2 gap-4">
-                {[
-                  { label: 'Commodity', value: formatCommodity(txn.commodity) },
-                  { label: 'Quantity', value: `${txn.quantity} ${txn.unit}` },
-                  { label: 'Quality Grade', value: `Grade ${txn.qualityGrade}` },
-                  { label: 'Price per Unit', value: formatCurrency(txn.pricePerUnit) },
-                  { label: 'Total Value', value: <span className="font-bold text-agri-700">{formatCurrency(txn.totalAmount)}</span> },
-                  { label: 'Currency', value: txn.currency },
-                  { label: 'Pickup Location', value: txn.pickupLocation },
-                  { label: 'Delivery Location', value: txn.deliveryLocation },
-                  { label: 'Expected Delivery', value: formatDate(txn.expectedDeliveryDate) },
-                  { label: 'Initiated', value: formatDateTime(txn.createdAt) },
-                ].map(({ label, value }) => (
-                  <div key={label}>
-                    <div className="text-xs text-gray-500 mb-0.5">{label}</div>
-                    <div className="text-sm font-medium text-gray-800">{value}</div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+        <div className="lg:col-span-2 space-y-5">
+          {/* Commercial Terms */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Commercial Terms</h2>
+            <div className="grid sm:grid-cols-2 gap-4">
+              {[
+                { label: 'Commodity', value: formatCommodity(txn.commodity) },
+                { label: 'Quantity', value: `${txn.quantity} ${txn.unit}` },
+                { label: 'Quality Grade', value: `Grade ${txn.qualityGrade}` },
+                { label: 'Price per Unit', value: formatCurrency(txn.pricePerUnit) },
+                { label: 'Total Value', value: <span className="font-bold text-gray-900">{formatCurrency(txn.totalAmount)}</span> },
+                { label: 'Currency', value: txn.currency },
+                { label: 'Pickup Location', value: txn.pickupLocation },
+                { label: 'Delivery Location', value: txn.deliveryLocation },
+                { label: 'Expected Delivery', value: formatDate(txn.expectedDeliveryDate) },
+                { label: 'Initiated', value: formatDateTime(txn.createdAt) },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <div className="text-xs text-gray-500 mb-0.5">{label}</div>
+                  <div className="text-sm font-medium text-gray-800">{value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
 
-          {/* Verified Supplier Media & Inspection Details */}
           <ListingMediaViewer
             media={listing?.media}
             photos={listing?.photos}
@@ -394,120 +438,112 @@ export function TransactionDetailPage() {
             supplierName={txn.supplierName}
           />
 
-          {/* Counterparties */}
-          <Card>
-            <CardHeader><h2 className="font-semibold text-gray-800">Parties</h2></CardHeader>
-            <CardContent>
-              <div className="grid sm:grid-cols-2 gap-6">
-                <div>
-                  <div className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wide">Buyer</div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold text-sm">
-                      {txn.buyerName[0]}
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-800">{txn.buyerName}</div>
-                      <div className="text-xs text-gray-500">{txn.deliveryLocation}</div>
-                    </div>
+          {/* Parties */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Parties</h2>
+            <div className="grid sm:grid-cols-2 gap-6">
+              <div>
+                <div className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wide">Buyer</div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold text-sm">
+                    {txn.buyerName[0]}
                   </div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wide">Supplier</div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-agri-100 rounded-full flex items-center justify-center text-agri-700 font-bold text-sm">
-                      {txn.supplierName[0]}
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-800">{txn.supplierName}</div>
-                      <div className="text-xs text-gray-500">{txn.pickupLocation}</div>
-                    </div>
+                  <div>
+                    <div className="text-sm font-medium text-gray-800">{txn.buyerName}</div>
+                    <div className="text-xs text-gray-500">{txn.deliveryLocation}</div>
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+              <div>
+                <div className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wide">Supplier</div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-700 font-bold text-sm">
+                    {txn.supplierName[0]}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-gray-800">{txn.supplierName}</div>
+                    <div className="text-xs text-gray-500">{txn.pickupLocation}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Payment */}
           {payment && (
-            <Card>
-              <CardHeader><h2 className="font-semibold text-gray-800">Payment</h2></CardHeader>
-              <CardContent>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div><div className="text-xs text-gray-500 mb-0.5">Payment ID</div><div className="text-sm font-mono text-gray-700">{payment.id}</div></div>
-                  <div><div className="text-xs text-gray-500 mb-0.5">Amount</div><div className="text-sm font-bold text-agri-700">{formatCurrency(payment.amount)}</div></div>
-                  <div><div className="text-xs text-gray-500 mb-0.5">Provider</div><div className="text-sm text-gray-700">{payment.provider}</div></div>
-                  <div>
-                    <div className="text-xs text-gray-500 mb-0.5">Status</div>
-                    <span className={`text-xs font-semibold px-2 py-1 rounded-full border inline-block
-                      ${payment.status === 'CONFIRMED' ? 'bg-agri-50 border-agri-200 text-agri-700' :
-                        payment.status === 'FAILED' ? 'bg-red-50 border-red-200 text-red-700' :
-                        'bg-amber-50 border-amber-200 text-amber-700'}`}>
-                      {payment.status}
-                    </span>
-                  </div>
-                  {payment.providerReference && (
-                    <div className="sm:col-span-2">
-                      <div className="text-xs text-gray-500 mb-0.5">Provider Reference</div>
-                      <div className="text-sm font-mono text-gray-700">{payment.providerReference}</div>
-                    </div>
-                  )}
-                  {payment.completedAt && (
-                    <div><div className="text-xs text-gray-500 mb-0.5">Confirmed at</div><div className="text-sm text-gray-700">{formatDateTime(payment.completedAt)}</div></div>
-                  )}
-                  {payment.failureReason && (
-                    <div className="sm:col-span-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-                      <div className="text-xs text-red-700">{payment.failureReason}</div>
-                    </div>
-                  )}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Payment</h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div><div className="text-xs text-gray-500 mb-0.5">Payment ID</div><div className="text-sm font-mono text-gray-700">{payment.id}</div></div>
+                <div><div className="text-xs text-gray-500 mb-0.5">Amount</div><div className="text-sm font-bold text-gray-900">{formatCurrency(payment.amount)}</div></div>
+                <div><div className="text-xs text-gray-500 mb-0.5">Provider</div><div className="text-sm text-gray-700">{payment.provider}</div></div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-0.5">Status</div>
+                  <span className={`text-xs font-semibold px-2 py-1 rounded-full border inline-block
+                    ${payment.status === 'CONFIRMED' ? 'bg-green-50 border-green-200 text-green-700' :
+                      payment.status === 'FAILED' ? 'bg-red-50 border-red-200 text-red-700' :
+                      'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                    {payment.status}
+                  </span>
                 </div>
-              </CardContent>
-            </Card>
+                {payment.providerReference && (
+                  <div className="sm:col-span-2">
+                    <div className="text-xs text-gray-500 mb-0.5">Provider Reference</div>
+                    <div className="text-sm font-mono text-gray-700">{payment.providerReference}</div>
+                  </div>
+                )}
+                {payment.completedAt && (
+                  <div><div className="text-xs text-gray-500 mb-0.5">Confirmed at</div><div className="text-sm text-gray-700">{formatDateTime(payment.completedAt)}</div></div>
+                )}
+                {payment.failureReason && (
+                  <div className="sm:col-span-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="text-xs text-red-700">{payment.failureReason}</div>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
           {/* Logistics */}
           {job && (
-            <Card>
-              <CardHeader><h2 className="font-semibold text-gray-800">Logistics</h2></CardHeader>
-              <CardContent>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div><div className="text-xs text-gray-500 mb-0.5">Job ID</div><div className="text-sm font-mono text-gray-700">{job.id}</div></div>
-                  <div>
-                    <div className="text-xs text-gray-500 mb-0.5">Status</div>
-                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 inline-block">
-                      {job.status.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-                  <div><div className="text-xs text-gray-500 mb-0.5">Provider</div><div className="text-sm text-gray-700">{job.providerName ?? <span className="text-gray-400 italic">Not yet assigned</span>}</div></div>
-                  <div><div className="text-xs text-gray-500 mb-0.5">Logistics Cost</div><div className="text-sm text-gray-700">{formatCurrency(job.logisticsCost)}</div></div>
-                  <div><div className="text-xs text-gray-500 mb-0.5">Pickup</div><div className="text-sm text-gray-700">{job.pickupLocation}</div></div>
-                  <div><div className="text-xs text-gray-500 mb-0.5">Destination</div><div className="text-sm text-gray-700">{job.deliveryLocation}</div></div>
-                  <div><div className="text-xs text-gray-500 mb-0.5">Expected Delivery</div><div className="text-sm text-gray-700">{formatDate(job.expectedDeliveryDate)}</div></div>
-                  {job.proofOfDelivery && (
-                    <div className="sm:col-span-2">
-                      <div className="text-xs text-gray-500 mb-1">Proof of Delivery</div>
-                      <div className="px-3 py-2 bg-agri-50 border border-agri-200 rounded-lg text-sm">
-                        <div className="font-medium text-agri-800">Received by: {job.proofOfDelivery.recipientName}</div>
-                        <div className="text-xs text-agri-600 mt-0.5">{job.proofOfDelivery.deliveryNote}</div>
-                        <div className="text-xs text-gray-500 mt-0.5">{formatDateTime(job.proofOfDelivery.timestamp)}</div>
-                      </div>
-                    </div>
-                  )}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Logistics</h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div><div className="text-xs text-gray-500 mb-0.5">Job ID</div><div className="text-sm font-mono text-gray-700">{job.id}</div></div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-0.5">Status</div>
+                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 inline-block">
+                    {job.status.replace(/_/g, ' ')}
+                  </span>
                 </div>
-              </CardContent>
-            </Card>
+                <div><div className="text-xs text-gray-500 mb-0.5">Provider</div><div className="text-sm text-gray-700">{job.providerName ?? <span className="text-gray-400 italic">Not yet assigned</span>}</div></div>
+                <div><div className="text-xs text-gray-500 mb-0.5">Logistics Cost</div><div className="text-sm text-gray-700">{formatCurrency(job.logisticsCost)}</div></div>
+                <div><div className="text-xs text-gray-500 mb-0.5">Pickup</div><div className="text-sm text-gray-700">{job.pickupLocation}</div></div>
+                <div><div className="text-xs text-gray-500 mb-0.5">Destination</div><div className="text-sm text-gray-700">{job.deliveryLocation}</div></div>
+                <div><div className="text-xs text-gray-500 mb-0.5">Expected Delivery</div><div className="text-sm text-gray-700">{formatDate(job.expectedDeliveryDate)}</div></div>
+                {job.proofOfDelivery && (
+                  <div className="sm:col-span-2">
+                    <div className="text-xs text-gray-500 mb-1">Proof of Delivery</div>
+                    <div className="px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm">
+                      <div className="font-medium text-gray-800">Received by: {job.proofOfDelivery.recipientName}</div>
+                      <div className="text-xs text-gray-600 mt-0.5">{job.proofOfDelivery.deliveryNote}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">{formatDateTime(job.proofOfDelivery.timestamp)}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
 
         {/* Audit trail */}
         <div>
-          <Card className="sticky top-6">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-gray-500" />
-                <h2 className="font-semibold text-gray-800">Audit Trail</h2>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0 max-h-[600px] overflow-y-auto">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs sticky top-6 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-gray-500" />
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Audit Trail</h2>
+            </div>
+            <div className="max-h-[600px] overflow-y-auto">
               {audit.length === 0 ? (
                 <div className="px-5 py-8 text-center text-xs text-gray-400">No audit events yet</div>
               ) : (
@@ -517,7 +553,7 @@ export function TransactionDetailPage() {
                     <div className="space-y-4">
                       {audit.map((ev) => (
                         <div key={ev.id} className="relative pl-6">
-                          <div className="absolute left-0 top-1 w-4 h-4 bg-agri-100 border-2 border-agri-400 rounded-full" />
+                          <div className="absolute left-0 top-1 w-4 h-4 bg-gray-100 border-2 border-gray-300 rounded-full" />
                           <div className="text-[10px] text-gray-400 mb-0.5">{formatDateTime(ev.createdAt)}</div>
                           <div className="text-xs font-medium text-gray-800">{ev.actorName}</div>
                           <div className="text-xs text-gray-600">{ev.detail ?? ev.action}</div>
@@ -527,65 +563,111 @@ export function TransactionDetailPage() {
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Pay modal */}
-      <Modal open={showPayModal} onClose={() => setShowPayModal(false)} title="Complete Escrow Payment">
-        <div className="space-y-4">
-          <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-800">
-            <strong>Escrow Protection</strong> — Funds are secured by AgriFlow and only released after delivery confirmation.
-          </div>
-          <div>
-            <div className="text-sm text-gray-600 mb-1">Transaction</div>
-            <div className="font-mono text-sm font-medium text-gray-800">{txn.id}</div>
-          </div>
-          <div>
-            <div className="text-sm text-gray-600 mb-1">Amount</div>
-            <div className="text-2xl font-bold text-agri-700">{formatCurrency(txn.totalAmount)}</div>
-          </div>
-          <div>
-            <div className="text-sm text-gray-600 mb-1">Provider</div>
-            <div className="text-sm text-gray-800">AgriFlow Escrow Settlement</div>
-          </div>
-          <div className="flex flex-col gap-2 pt-2">
-            <Button className="w-full" onClick={() => handlePay('success')} icon={<CreditCard className="w-4 h-4" />}>
+      {showPayModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowPayModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-900">Complete Escrow Payment</h2>
+              <button type="button" onClick={() => setShowPayModal(false)} className="p-1 rounded-md hover:bg-gray-100 text-gray-500 text-lg leading-none">✕</button>
+            </div>
+            <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-800">
+              <strong>Escrow Protection</strong> — Funds are secured by AgriFlow and only released after delivery confirmation.
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 mb-1">Transaction</div>
+              <div className="font-mono text-sm font-medium text-gray-800">{txn.id}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 mb-1">Amount</div>
+              <div className="text-2xl font-bold text-gray-900">{formatCurrency(txn.totalAmount)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 mb-1">Provider</div>
+              <div className="text-sm text-gray-800">AgriFlow Escrow Settlement</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => handlePay('success')}
+              className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs"
+            >
+              <CreditCard className="w-4 h-4" />
               Confirm Payment {formatCurrency(txn.totalAmount)}
-            </Button>
+            </button>
           </div>
         </div>
-      </Modal>
+      )}
 
       {/* Dispute modal */}
-      <Modal open={showDisputeModal} onClose={() => setShowDisputeModal(false)} title="Report Issue">
-        <div className="space-y-4">
-          <div className="grid gap-3">
-            <Input
-              label="Reason"
-              value={disputeForm.reason}
-              onChange={(e) => setDisputeForm((f) => ({ ...f, reason: e.target.value }))}
-              placeholder="e.g. Wrong quantity delivered"
-              required
-            />
-            <Textarea
-              label="Description"
-              value={disputeForm.description}
-              onChange={(e) => setDisputeForm((f) => ({ ...f, description: e.target.value }))}
-              rows={4}
-              placeholder="Describe the issue in detail..."
-              required
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setShowDisputeModal(false)}>Cancel</Button>
-            <Button variant="danger" loading={loading} onClick={handleRaiseDispute} icon={<AlertTriangle className="w-4 h-4" />}>
-              Submit Dispute
-            </Button>
+      {showDisputeModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowDisputeModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-900">Report Issue</h2>
+              <button type="button" onClick={() => setShowDisputeModal(false)} className="p-1 rounded-md hover:bg-gray-100 text-gray-500 text-lg leading-none">✕</button>
+            </div>
+            <div className="grid gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Reason <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
+                  value={disputeForm.reason}
+                  onChange={(e) => setDisputeForm((f) => ({ ...f, reason: e.target.value }))}
+                  placeholder="e.g. Wrong quantity delivered"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Description <span className="text-red-500">*</span></label>
+                <textarea
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none resize-none"
+                  value={disputeForm.description}
+                  onChange={(e) => setDisputeForm((f) => ({ ...f, description: e.target.value }))}
+                  rows={4}
+                  placeholder="Describe the issue in detail..."
+                  required
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDisputeModal(false)}
+                className="px-3 py-2 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleRaiseDispute}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors shadow-xs disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                Submit Dispute
+              </button>
+            </div>
           </div>
         </div>
-      </Modal>
+      )}
     </div>
   );
 }

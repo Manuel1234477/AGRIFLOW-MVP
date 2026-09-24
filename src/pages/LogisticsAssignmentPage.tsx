@@ -115,7 +115,7 @@ export function LogisticsAssignmentPage() {
             <div className="relative pl-6 space-y-6 border-l-2 border-dashed border-gray-200 ml-2">
               {/* Pickup Point */}
               <div className="relative">
-                <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-white border-2 border-agri-700" />
+                <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-white border-2 border-gray-800" />
                 <div className="text-xs text-gray-500 font-medium">Pickup location</div>
                 <div className="text-sm font-semibold text-gray-900 mt-0.5">{pickup}</div>
                 <div className="text-xs text-gray-500 mt-0.5">Supplier: Adeyemi Produce Co.</div>
@@ -123,7 +123,7 @@ export function LogisticsAssignmentPage() {
 
               {/* Delivery Point */}
               <div className="relative">
-                <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-agri-700 border-2 border-agri-700" />
+                <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-gray-900 border-2 border-gray-900" />
                 <div className="text-xs text-gray-500 font-medium">Delivery location</div>
                 <div className="text-sm font-semibold text-gray-900 mt-0.5">{delivery}</div>
                 <div className="text-xs text-gray-500 mt-0.5">Recipient: Kola Farms Ltd · Lagos Warehouse</div>
@@ -188,11 +188,11 @@ export function LogisticsAssignmentPage() {
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>Escrow Guarantee</span>
-                <span className="text-agri-700 font-medium">100% Secured</span>
+                <span className="text-emerald-700 font-medium">100% Secured</span>
               </div>
               <div className="flex justify-between text-sm font-bold text-gray-900 pt-3 border-t border-gray-100">
                 <span>Total Payout</span>
-                <span className="text-agri-700">{formatCurrency(cost)}</span>
+                <span className="text-emerald-700">{formatCurrency(cost)}</span>
               </div>
             </div>
 
@@ -202,7 +202,7 @@ export function LogisticsAssignmentPage() {
                   type="button"
                   disabled={acting}
                   onClick={handleAccept}
-                  className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-agri-700 hover:bg-agri-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
+                  className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
                 >
                   {acting ? 'Processing...' : 'Accept assignment'}
                 </button>
@@ -216,7 +216,7 @@ export function LogisticsAssignmentPage() {
                 </button>
               </div>
             ) : (
-              <div className="pt-2 text-center text-xs font-semibold text-agri-800 bg-agri-50 p-2.5 rounded-lg border border-agri-200">
+              <div className="pt-2 text-center text-xs font-semibold text-gray-900 bg-green-50 p-2.5 rounded-lg border border-green-200">
                 Job Status: {job?.status?.replace(/_/g, ' ')}
               </div>
             )}

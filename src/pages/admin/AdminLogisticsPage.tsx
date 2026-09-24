@@ -5,11 +5,8 @@ import { logisticsService } from '../../services/logisticsService';
 import { transactionService } from '../../services/transactionService';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../components/ui/Toast';
-import { Button } from '../../components/ui/Button';
-import { Modal } from '../../components/ui/Modal';
-import { Select } from '../../components/ui/Input';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { StatusBadge } from '../../components/ui/StatusBadge';
+import { Loader2 } from 'lucide-react';
 import { formatDate, formatCommodity } from '../../utils/format';
 import type { LogisticsJob, Transaction } from '../../types';
 
@@ -68,7 +65,7 @@ export function AdminLogisticsPage() {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto space-y-5">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Logistics Jobs</h1>
 
       {sorted.length === 0 ? (
@@ -110,7 +107,7 @@ export function AdminLogisticsPage() {
                         )}
                       </td>
                       <td className="px-5 py-3.5">
-                        {txn && <StatusBadge status={txn.status} size="sm" />}
+                        {txn && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-50 border border-gray-200 text-gray-700 inline-block">{txn.status.replace(/_/g,' ')}</span>}
                       </td>
                       <td className="px-5 py-3.5">
                         <span className="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
@@ -119,12 +116,17 @@ export function AdminLogisticsPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         {j.status === 'PENDING' && (
-                          <Button size="sm" icon={<User className="w-3.5 h-3.5" />} onClick={() => { setAssigningJob(j); setSelectedProvider(''); }}>
+                          <button
+                            type="button"
+                            onClick={() => { setAssigningJob(j); setSelectedProvider(''); }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs"
+                          >
+                            <User className="w-3.5 h-3.5" />
                             Assign Provider
-                          </Button>
+                          </button>
                         )}
                         {j.status !== 'PENDING' && txn && (
-                          <button onClick={() => navigate(`/app/transactions/${j.transactionId}`)} className="text-xs text-agri-600 hover:text-agri-700 font-medium">
+                          <button onClick={() => navigate(`/app/transactions/${j.transactionId}`)} className="text-xs text-gray-500 hover:text-gray-800 font-medium">
                             View TXN
                           </button>
                         )}
@@ -138,36 +140,49 @@ export function AdminLogisticsPage() {
         </div>
       )}
 
-      <Modal open={!!assigningJob} onClose={() => setAssigningJob(null)} title="Assign Logistics Provider">
-        {assigningJob && (
-          <div className="space-y-4">
+      {assigningJob && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setAssigningJob(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-900">Assign Logistics Provider</h2>
+              <button type="button" onClick={() => setAssigningJob(null)} className="p-1 rounded-md hover:bg-gray-100 text-gray-500 text-lg leading-none">✕</button>
+            </div>
             <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm">
               <div className="font-medium">{formatCommodity(assigningJob.commodity)} · {assigningJob.quantity} {assigningJob.unit}</div>
               <div className="text-xs text-gray-500 mt-0.5">{assigningJob.pickupLocation} → {assigningJob.deliveryLocation}</div>
               <div className="text-xs text-gray-500">Expected: {formatDate(assigningJob.expectedDeliveryDate)}</div>
             </div>
-            <Select
-              label="Logistics Provider"
-              value={selectedProvider}
-              onChange={(e) => setSelectedProvider(e.target.value)}
-              required
-            >
-              <option value="">Select a provider...</option>
-              {providers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.organizationName ?? p.name} {p.verified ? '✓ Verified' : ''}
-                </option>
-              ))}
-            </Select>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Logistics Provider <span className="text-red-500">*</span></label>
+              <select
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
+                value={selectedProvider}
+                onChange={(e) => setSelectedProvider(e.target.value)}
+                required
+              >
+                <option value="">Select a provider...</option>
+                {providers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.organizationName ?? p.name} {p.verified ? '✓ Verified' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setAssigningJob(null)}>Cancel</Button>
-              <Button loading={loading} onClick={handleAssign} icon={<Truck className="w-4 h-4" />}>
+              <button type="button" onClick={() => setAssigningJob(null)} className="px-3 py-2 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors">Cancel</button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleAssign}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
                 Assign Provider
-              </Button>
+              </button>
             </div>
           </div>
-        )}
-      </Modal>
+        </div>
+      )}
     </div>
   );
 }

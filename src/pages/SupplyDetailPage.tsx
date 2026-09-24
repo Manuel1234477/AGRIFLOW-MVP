@@ -7,11 +7,7 @@ import { matchingService } from '../services/matchingService';
 import { transactionService } from '../services/transactionService';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../components/ui/Toast';
-import { Button } from '../components/ui/Button';
-import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { VerifiedBadge } from '../components/ui/VerifiedBadge';
-import { Modal } from '../components/ui/Modal';
-import { Input } from '../components/ui/Input';
 import { ListingMediaViewer } from '../components/ui/ListingMediaViewer';
 import { formatCurrency, formatDate, formatCommodity, COMMODITY_ICONS } from '../utils/format';
 import type { SupplyListing, DemandRequest, Match } from '../types';
@@ -110,7 +106,7 @@ export function SupplyDetailPage() {
   const bestMatch = matches.length > 0 ? matches[0] : null;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="max-w-5xl mx-auto space-y-5">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-gray-100 rounded-lg">
           <ArrowLeft className="w-4 h-4 text-gray-500" />
@@ -121,8 +117,7 @@ export function SupplyDetailPage() {
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           {/* Main listing */}
-          <Card>
-            <CardContent className="pt-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-4">
                   <div className="text-5xl">{COMMODITY_ICONS[listing.commodity] ?? '🌾'}</div>
@@ -139,10 +134,10 @@ export function SupplyDetailPage() {
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
-                <div className="px-3 py-3 bg-agri-50 rounded-xl">
-                  <div className="text-xs text-agri-600 mb-0.5">Price per unit</div>
-                  <div className="text-lg font-bold text-agri-800">{formatCurrency(listing.pricePerUnit)}</div>
-                  <div className="text-xs text-agri-600">per {listing.unit}</div>
+                <div className="px-3 py-3 bg-green-50 rounded-xl">
+                  <div className="text-xs text-gray-400 mb-0.5">Price per unit</div>
+                  <div className="text-lg font-bold text-gray-900">{formatCurrency(listing.pricePerUnit)}</div>
+                  <div className="text-xs text-gray-500">per {listing.unit}</div>
                 </div>
                 <div className="px-3 py-3 bg-gray-50 rounded-xl">
                   <div className="text-xs text-gray-500 mb-0.5">Available quantity</div>
@@ -170,8 +165,7 @@ export function SupplyDetailPage() {
                 <div className="text-xs font-medium text-gray-500 mb-1">Description</div>
                 <p className="text-sm text-gray-700 leading-relaxed">{listing.description}</p>
               </div>
-            </CardContent>
-          </Card>
+          </div>
 
           {/* Media & Inspection Proof */}
           <ListingMediaViewer
@@ -186,107 +180,139 @@ export function SupplyDetailPage() {
           />
 
           {/* Supplier */}
-          <Card>
-            <CardHeader><h2 className="font-semibold text-gray-800">Supplier</h2></CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-agri-100 rounded-full flex items-center justify-center text-agri-700 font-bold text-lg">
-                  {listing.supplierName[0]}
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900">{listing.supplierName}</div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <VerifiedBadge verified={listing.supplierVerified} />
-                    <span className="text-xs text-gray-500">{listing.location}</span>
-                  </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
+            <h2 className="font-semibold text-gray-800 mb-3">Supplier</h2>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-emerald-700 font-bold text-lg">
+                {listing.supplierName[0]}
+              </div>
+              <div>
+                <div className="font-semibold text-gray-900">{listing.supplierName}</div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <VerifiedBadge verified={listing.supplierVerified} />
+                  <span className="text-xs text-gray-500">{listing.location}</span>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
 
         {/* Sidebar */}
         <div className="space-y-4">
           {/* Match card */}
           {bestMatch && (
-            <Card>
-              <CardContent className="pt-5">
-                <div className="text-center mb-3">
-                  <div className="text-3xl font-bold text-agri-700">{bestMatch.score}%</div>
-                  <div className="text-xs text-gray-500 font-medium">Match Score</div>
-                  <div className="text-[10px] text-gray-400">Rule-based compatibility match</div>
-                </div>
-                <div className="space-y-1.5">
-                  {bestMatch.factors.map((f) => (
-                    <div key={f.label} className="flex items-start gap-2">
-                      {f.matched ? <CheckCircle2 className="w-3.5 h-3.5 text-agri-500 mt-0.5 shrink-0" /> : <XCircle className="w-3.5 h-3.5 text-gray-300 mt-0.5 shrink-0" />}
-                      <div>
-                        <div className="text-xs font-medium text-gray-700">{f.label}</div>
-                        {f.detail && <div className="text-[10px] text-gray-500">{f.detail}</div>}
-                      </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
+              <div className="text-center mb-3">
+                <div className="text-3xl font-bold text-gray-900">{bestMatch.score}%</div>
+                <div className="text-xs text-gray-500 font-medium">Match Score</div>
+                <div className="text-[10px] text-gray-400">Rule-based compatibility match</div>
+              </div>
+              <div className="space-y-1.5">
+                {bestMatch.factors.map((f) => (
+                  <div key={f.label} className="flex items-start gap-2">
+                    {f.matched ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600 mt-0.5 shrink-0" /> : <XCircle className="w-3.5 h-3.5 text-gray-300 mt-0.5 shrink-0" />}
+                    <div>
+                      <div className="text-xs font-medium text-gray-700">{f.label}</div>
+                      {f.detail && <div className="text-[10px] text-gray-500">{f.detail}</div>}
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* Actions */}
           {session?.role === 'buyer' && (
             <div className="space-y-2">
               {!bestMatch && (
-                <Button variant="secondary" className="w-full" loading={finding} onClick={findMatches}>
-                  Check Compatibility
-                </Button>
+                <button
+                  type="button"
+                  disabled={finding}
+                  onClick={findMatches}
+                  className="w-full px-4 py-2.5 text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {finding ? 'Checking…' : 'Check Compatibility'}
+                </button>
               )}
-              <Button className="w-full" icon={<ArrowRightLeft className="w-4 h-4" />} onClick={() => setShowTxnModal(true)}>
+              <button
+                type="button"
+                onClick={() => setShowTxnModal(true)}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs"
+              >
+                <ArrowRightLeft className="w-4 h-4" />
                 Start Transaction
-              </Button>
+              </button>
             </div>
           )}
         </div>
       </div>
 
       {/* Transaction modal */}
-      <Modal open={showTxnModal} onClose={() => setShowTxnModal(false)} title="Initiate Transaction">
-        <div className="space-y-4">
-          <div className="px-3 py-2 bg-agri-50 border border-agri-200 rounded-lg text-xs text-agri-800">
-            Supplier: <strong>{listing.supplierName}</strong> · {formatCommodity(listing.commodity)} · Grade {listing.qualityGrade}
-          </div>
-          <Input
-            label="Quantity" type="number" required
-            value={txnForm.quantity}
-            onChange={(e) => setTxnForm((f) => ({ ...f, quantity: e.target.value }))}
-            hint={`Max ${listing.quantity} ${listing.unit}`}
-            placeholder={String(listing.quantity)}
-          />
-          <div className="text-sm text-gray-600">
-            Unit price: {formatCurrency(listing.pricePerUnit)} / {listing.unit}
-            {txnForm.quantity && (
-              <span className="ml-2 font-semibold text-agri-700">
-                Total: {formatCurrency(Number(txnForm.quantity) * listing.pricePerUnit)}
-              </span>
-            )}
-          </div>
-          <Input
-            label="Delivery Location" required
-            value={txnForm.deliveryLocation}
-            onChange={(e) => setTxnForm((f) => ({ ...f, deliveryLocation: e.target.value }))}
-            placeholder="e.g. Abuja, Nigeria"
-          />
-          <Input
-            label="Required Delivery Date" type="date" required
-            value={txnForm.expectedDeliveryDate}
-            onChange={(e) => setTxnForm((f) => ({ ...f, expectedDeliveryDate: e.target.value }))}
-          />
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setShowTxnModal(false)}>Cancel</Button>
-            <Button loading={loading} onClick={handleStartTransaction} icon={<ArrowRightLeft className="w-4 h-4" />}>
-              Initiate Transaction
-            </Button>
+      {showTxnModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowTxnModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-900">Initiate Transaction</h2>
+              <button type="button" onClick={() => setShowTxnModal(false)} className="p-1 rounded-md hover:bg-gray-100 text-gray-500 text-lg leading-none">✕</button>
+            </div>
+            <div className="px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-xs text-gray-900">
+              Supplier: <strong>{listing.supplierName}</strong> · {formatCommodity(listing.commodity)} · Grade {listing.qualityGrade}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Quantity <span className="text-red-500">*</span></label>
+              <input
+                type="number"
+                required
+                value={txnForm.quantity}
+                onChange={(e) => setTxnForm((f) => ({ ...f, quantity: e.target.value }))}
+                placeholder={String(listing.quantity)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
+              />
+              <p className="text-xs text-gray-400 mt-1">Max {listing.quantity} {listing.unit}</p>
+            </div>
+            <div className="text-sm text-gray-600">
+              Unit price: {formatCurrency(listing.pricePerUnit)} / {listing.unit}
+              {txnForm.quantity && (
+                <span className="ml-2 font-semibold text-gray-900">
+                  Total: {formatCurrency(Number(txnForm.quantity) * listing.pricePerUnit)}
+                </span>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Delivery Location <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                required
+                value={txnForm.deliveryLocation}
+                onChange={(e) => setTxnForm((f) => ({ ...f, deliveryLocation: e.target.value }))}
+                placeholder="e.g. Abuja, Nigeria"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Required Delivery Date <span className="text-red-500">*</span></label>
+              <input
+                type="date"
+                required
+                value={txnForm.expectedDeliveryDate}
+                onChange={(e) => setTxnForm((f) => ({ ...f, expectedDeliveryDate: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowTxnModal(false)} className="px-3 py-2 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors">Cancel</button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleStartTransaction}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
+              >
+                {loading ? 'Initiating…' : <><ArrowRightLeft className="w-3.5 h-3.5" />Initiate Transaction</>}
+              </button>
+            </div>
           </div>
         </div>
-      </Modal>
+      )}
     </div>
   );
 }

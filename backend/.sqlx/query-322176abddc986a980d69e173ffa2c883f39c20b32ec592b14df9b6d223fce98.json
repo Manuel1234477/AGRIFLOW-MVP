@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO demand_requests\n            (id, buyer_id, buyer_name, commodity, quantity, unit, quality_grade,\n             destination_location, required_by_date, indicative_budget, currency, notes, status)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'open')\n        RETURNING id, buyer_id, buyer_name, commodity, quantity, unit, quality_grade,\n                  destination_location, required_by_date, indicative_budget, currency, notes,\n                  status as \"status: _\", created_at, updated_at\n        ",
+  "query": "\n            INSERT INTO supply_listings\n                (id, supplier_id, supplier_name, supplier_verified, commodity, quantity, unit,\n                 quality_grade, price_per_unit, currency, location, availability_date, description, status)\n            VALUES ($1, $2, $3, TRUE, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active')\n            RETURNING id, supplier_id, supplier_name, supplier_verified, commodity, quantity,\n                      unit, quality_grade, price_per_unit, currency, location, availability_date,\n                      description, status as \"status: _\", created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -9,161 +9,172 @@
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "demand_requests",
+            "table": "supply_listings",
             "name": "id"
           }
         }
       },
       {
         "ordinal": 1,
-        "name": "buyer_id",
+        "name": "supplier_id",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "demand_requests",
-            "name": "buyer_id"
+            "table": "supply_listings",
+            "name": "supplier_id"
           }
         }
       },
       {
         "ordinal": 2,
-        "name": "buyer_name",
+        "name": "supplier_name",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "demand_requests",
-            "name": "buyer_name"
+            "table": "supply_listings",
+            "name": "supplier_name"
           }
         }
       },
       {
         "ordinal": 3,
-        "name": "commodity",
-        "type_info": "Text",
+        "name": "supplier_verified",
+        "type_info": "Bool",
         "origin": {
           "Table": {
-            "table": "demand_requests",
-            "name": "commodity"
+            "table": "supply_listings",
+            "name": "supplier_verified"
           }
         }
       },
       {
         "ordinal": 4,
-        "name": "quantity",
-        "type_info": "Numeric",
+        "name": "commodity",
+        "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "demand_requests",
-            "name": "quantity"
+            "table": "supply_listings",
+            "name": "commodity"
           }
         }
       },
       {
         "ordinal": 5,
-        "name": "unit",
-        "type_info": "Text",
+        "name": "quantity",
+        "type_info": "Numeric",
         "origin": {
           "Table": {
-            "table": "demand_requests",
-            "name": "unit"
+            "table": "supply_listings",
+            "name": "quantity"
           }
         }
       },
       {
         "ordinal": 6,
-        "name": "quality_grade",
+        "name": "unit",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "demand_requests",
-            "name": "quality_grade"
+            "table": "supply_listings",
+            "name": "unit"
           }
         }
       },
       {
         "ordinal": 7,
-        "name": "destination_location",
+        "name": "quality_grade",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "demand_requests",
-            "name": "destination_location"
+            "table": "supply_listings",
+            "name": "quality_grade"
           }
         }
       },
       {
         "ordinal": 8,
-        "name": "required_by_date",
-        "type_info": "Timestamptz",
+        "name": "price_per_unit",
+        "type_info": "Numeric",
         "origin": {
           "Table": {
-            "table": "demand_requests",
-            "name": "required_by_date"
+            "table": "supply_listings",
+            "name": "price_per_unit"
           }
         }
       },
       {
         "ordinal": 9,
-        "name": "indicative_budget",
-        "type_info": "Numeric",
-        "origin": {
-          "Table": {
-            "table": "demand_requests",
-            "name": "indicative_budget"
-          }
-        }
-      },
-      {
-        "ordinal": 10,
         "name": "currency",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "demand_requests",
+            "table": "supply_listings",
             "name": "currency"
           }
         }
       },
       {
-        "ordinal": 11,
-        "name": "notes",
+        "ordinal": 10,
+        "name": "location",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "demand_requests",
-            "name": "notes"
+            "table": "supply_listings",
+            "name": "location"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "availability_date",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "supply_listings",
+            "name": "availability_date"
           }
         }
       },
       {
         "ordinal": 12,
-        "name": "status: _",
+        "name": "description",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "demand_requests",
-            "name": "status"
+            "table": "supply_listings",
+            "name": "description"
           }
         }
       },
       {
         "ordinal": 13,
-        "name": "created_at",
-        "type_info": "Timestamptz",
+        "name": "status: _",
+        "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "demand_requests",
-            "name": "created_at"
+            "table": "supply_listings",
+            "name": "status"
           }
         }
       },
       {
         "ordinal": 14,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "supply_listings",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
         "name": "updated_at",
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
-            "table": "demand_requests",
+            "table": "supply_listings",
             "name": "updated_at"
           }
         }
@@ -178,10 +189,10 @@
         "Numeric",
         "Text",
         "Text",
-        "Text",
-        "Timestamptz",
         "Numeric",
         "Text",
+        "Text",
+        "Timestamptz",
         "Text"
       ]
     },
@@ -197,11 +208,12 @@
       false,
       false,
       false,
-      true,
+      false,
+      false,
       false,
       false,
       false
     ]
   },
-  "hash": "26329c1b77829dfc9ca5ebfadb158619b6fe5f9d1cfdb32b0a2f6ae1a33e8932"
+  "hash": "322176abddc986a980d69e173ffa2c883f39c20b32ec592b14df9b6d223fce98"
 }

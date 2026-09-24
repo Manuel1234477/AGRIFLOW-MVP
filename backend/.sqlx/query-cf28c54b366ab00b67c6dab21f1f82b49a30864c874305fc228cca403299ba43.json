@@ -1,0 +1,220 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, transaction_id, provider_id, provider_name, commodity, quantity, unit,\n               pickup_location, delivery_location, pickup_date, expected_delivery_date,\n               logistics_cost, currency, status, proof_of_delivery, created_at, updated_at\n        FROM logistics_jobs WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "transaction_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "transaction_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "provider_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "provider_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "provider_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "provider_name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "commodity",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "commodity"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "quantity",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "quantity"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "unit",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "unit"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "pickup_location",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "pickup_location"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "delivery_location",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "delivery_location"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "pickup_date",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "pickup_date"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "expected_delivery_date",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "expected_delivery_date"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "logistics_cost",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "logistics_cost"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "currency",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "currency"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "proof_of_delivery",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "proof_of_delivery"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "logistics_jobs",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "cf28c54b366ab00b67c6dab21f1f82b49a30864c874305fc228cca403299ba43"
+}

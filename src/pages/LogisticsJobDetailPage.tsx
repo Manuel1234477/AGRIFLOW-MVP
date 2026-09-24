@@ -1,35 +1,41 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, CheckCircle2, Package, Truck, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ArrowLeft, MapPin, CheckCircle2, Package, Truck, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react';
 import { logisticsService } from '../services/logisticsService';
 import { transactionService } from '../services/transactionService';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../components/ui/Toast';
-import { Button } from '../components/ui/Button';
-import { Card, CardContent, CardHeader } from '../components/ui/Card';
-import { Modal } from '../components/ui/Modal';
-import { Input, Textarea } from '../components/ui/Input';
-import { StatusBadge } from '../components/ui/StatusBadge';
 import { formatCurrency, formatDate, formatDateTime, formatCommodity } from '../utils/format';
 import type { LogisticsJob, Transaction } from '../types';
 
-const NEXT_ACTIONS: Record<string, { label: string; icon: React.ReactNode; to: any; variant?: any }[]> = {
+const NEXT_ACTIONS: Record<string, { label: string; icon: React.ReactNode; to: string; danger?: boolean }[]> = {
   ASSIGNED: [
-    { label: 'Accept Job', icon: <ThumbsUp className="w-4 h-4" />, to: 'ACCEPTED', variant: 'primary' },
-    { label: 'Reject Job', icon: <ThumbsDown className="w-4 h-4" />, to: 'REJECTED', variant: 'danger' },
+    { label: 'Accept Job', icon: <ThumbsUp className="w-3.5 h-3.5" />, to: 'ACCEPTED' },
+    { label: 'Reject Job', icon: <ThumbsDown className="w-3.5 h-3.5" />, to: 'REJECTED', danger: true },
   ],
   ACCEPTED: [
-    { label: 'Ready for Pickup', icon: <MapPin className="w-4 h-4" />, to: 'READY_FOR_PICKUP' },
+    { label: 'Ready for Pickup', icon: <MapPin className="w-3.5 h-3.5" />, to: 'READY_FOR_PICKUP' },
   ],
   READY_FOR_PICKUP: [
-    { label: 'Picked Up', icon: <Package className="w-4 h-4" />, to: 'PICKED_UP' },
+    { label: 'Picked Up', icon: <Package className="w-3.5 h-3.5" />, to: 'PICKED_UP' },
   ],
   PICKED_UP: [
-    { label: 'In Transit', icon: <Truck className="w-4 h-4" />, to: 'IN_TRANSIT' },
+    { label: 'In Transit', icon: <Truck className="w-3.5 h-3.5" />, to: 'IN_TRANSIT' },
   ],
   IN_TRANSIT: [
-    { label: 'Mark Delivered', icon: <CheckCircle2 className="w-4 h-4" />, to: 'DELIVERED' },
+    { label: 'Mark Delivered', icon: <CheckCircle2 className="w-3.5 h-3.5" />, to: 'DELIVERED' },
   ],
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  ASSIGNED: 'bg-indigo-50 border-indigo-200 text-indigo-800',
+  ACCEPTED: 'bg-blue-50 border-blue-200 text-blue-800',
+  READY_FOR_PICKUP: 'bg-cyan-50 border-cyan-200 text-cyan-800',
+  PICKED_UP: 'bg-sky-50 border-sky-200 text-sky-800',
+  IN_TRANSIT: 'bg-violet-50 border-violet-200 text-violet-800',
+  DELIVERED: 'bg-teal-50 border-teal-200 text-teal-800',
+  COMPLETED: 'bg-green-50 border-green-200 text-green-800',
+  REJECTED: 'bg-red-50 border-red-200 text-red-800',
 };
 
 export function LogisticsJobDetailPage() {
@@ -96,21 +102,11 @@ export function LogisticsJobDetailPage() {
     finally { setLoading(false); }
   };
 
-  const STATUS_COLORS: Record<string, string> = {
-    ASSIGNED: 'bg-indigo-50 border-indigo-200 text-indigo-800',
-    ACCEPTED: 'bg-blue-50 border-blue-200 text-blue-800',
-    READY_FOR_PICKUP: 'bg-cyan-50 border-cyan-200 text-cyan-800',
-    PICKED_UP: 'bg-sky-50 border-sky-200 text-sky-800',
-    IN_TRANSIT: 'bg-violet-50 border-violet-200 text-violet-800',
-    DELIVERED: 'bg-teal-50 border-teal-200 text-teal-800',
-    COMPLETED: 'bg-agri-50 border-agri-200 text-agri-800',
-    REJECTED: 'bg-red-50 border-red-200 text-red-800',
-  };
-
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-gray-100 rounded-lg">
+    <div className="max-w-5xl mx-auto space-y-5">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <button type="button" onClick={() => navigate(-1)} className="p-1.5 hover:bg-gray-100 rounded-lg">
           <ArrowLeft className="w-4 h-4 text-gray-500" />
         </button>
         <div>
@@ -124,125 +120,161 @@ export function LogisticsJobDetailPage() {
         </div>
       </div>
 
-      {/* Action buttons */}
+      {/* Action area */}
       {nextActions.length > 0 && (
-        <div className="mb-6 px-4 py-4 bg-indigo-50 border border-indigo-200 rounded-xl">
+        <div className="px-4 py-4 bg-indigo-50 border border-indigo-200 rounded-xl">
           <p className="text-sm font-semibold text-indigo-800 mb-3">Action Required</p>
           <div className="flex flex-wrap gap-2">
             {nextActions.map((a) => (
-              <Button
+              <button
                 key={a.label}
-                variant={a.variant ?? 'primary'}
-                loading={loading}
-                icon={a.icon}
+                type="button"
+                disabled={loading}
                 onClick={() => handleAction(a.to)}
+                className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg transition-colors shadow-xs disabled:opacity-50 ${
+                  a.danger
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    : 'bg-gray-900 hover:bg-gray-800 text-white'
+                }`}
               >
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : a.icon}
                 {a.label}
-              </Button>
+              </button>
             ))}
           </div>
         </div>
       )}
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader><h2 className="font-semibold text-gray-800">Shipment Details</h2></CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
-                <MapPin className="w-4 h-4 text-agri-600 mt-0.5 shrink-0" />
-                <div>
-                  <div className="text-xs text-gray-500 mb-0.5">Pickup</div>
-                  <div className="text-sm font-semibold text-gray-800">{job.pickupLocation}</div>
-                </div>
-              </div>
-              <div className="flex justify-center">
-                <div className="h-8 w-px bg-gray-200 relative">
-                  <Truck className="w-4 h-4 text-gray-400 absolute -left-2 top-2" />
-                </div>
-              </div>
-              <div className="flex items-start gap-3 p-3 bg-agri-50 rounded-xl">
-                <CheckCircle2 className="w-4 h-4 text-agri-600 mt-0.5 shrink-0" />
-                <div>
-                  <div className="text-xs text-gray-500 mb-0.5">Delivery</div>
-                  <div className="text-sm font-semibold text-agri-800">{job.deliveryLocation}</div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <div><div className="text-xs text-gray-500 mb-0.5">Commodity</div><div className="text-sm font-medium">{formatCommodity(job.commodity)}</div></div>
-                <div><div className="text-xs text-gray-500 mb-0.5">Quantity</div><div className="text-sm font-medium">{job.quantity} {job.unit}</div></div>
-                <div><div className="text-xs text-gray-500 mb-0.5">Expected Delivery</div><div className="text-sm font-medium">{formatDate(job.expectedDeliveryDate)}</div></div>
-                <div><div className="text-xs text-gray-500 mb-0.5">Logistics Fee</div><div className="text-sm font-semibold text-agri-700">{formatCurrency(job.logisticsCost)}</div></div>
+      <div className="grid lg:grid-cols-2 gap-5">
+        {/* Shipment Details */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Shipment Details</h2>
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
+              <MapPin className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+              <div>
+                <div className="text-xs text-gray-500 mb-0.5">Pickup</div>
+                <div className="text-sm font-semibold text-gray-800">{job.pickupLocation}</div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+            <div className="flex justify-center">
+              <div className="h-8 w-px bg-gray-200 relative">
+                <Truck className="w-4 h-4 text-gray-400 absolute -left-2 top-2" />
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
+              <CheckCircle2 className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+              <div>
+                <div className="text-xs text-gray-500 mb-0.5">Delivery</div>
+                <div className="text-sm font-semibold text-gray-900">{job.deliveryLocation}</div>
+              </div>
+            </div>
 
-        <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100 text-xs">
+              <div><div className="text-gray-500 mb-0.5">Commodity</div><div className="font-medium text-gray-800">{formatCommodity(job.commodity)}</div></div>
+              <div><div className="text-gray-500 mb-0.5">Quantity</div><div className="font-medium text-gray-800">{job.quantity} {job.unit}</div></div>
+              <div><div className="text-gray-500 mb-0.5">Expected Delivery</div><div className="font-medium text-gray-800">{formatDate(job.expectedDeliveryDate)}</div></div>
+              <div><div className="text-gray-500 mb-0.5">Logistics Fee</div><div className="font-bold text-gray-900">{formatCurrency(job.logisticsCost)}</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-5">
           {/* Transaction ref */}
           {txn && (
-            <Card>
-              <CardHeader><h2 className="font-semibold text-gray-800">Transaction</h2></CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div><div className="text-xs text-gray-500 mb-0.5">Transaction ID</div><div className="text-sm font-mono text-gray-700">{txn.id}</div></div>
-                  <div><div className="text-xs text-gray-500 mb-0.5">Buyer</div><div className="text-sm text-gray-700">{txn.buyerName}</div></div>
-                  <div><div className="text-xs text-gray-500 mb-0.5">Value</div><div className="text-sm font-bold text-agri-700">{formatCurrency(txn.totalAmount)}</div></div>
-                  <div><div className="text-xs text-gray-500 mb-0.5">Status</div><StatusBadge status={txn.status} size="sm" /></div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Transaction</h2>
+              <div className="space-y-2 text-xs">
+                <div><div className="text-gray-500 mb-0.5">Transaction ID</div><div className="font-mono text-gray-700">{txn.id}</div></div>
+                <div><div className="text-gray-500 mb-0.5">Buyer</div><div className="text-gray-700">{txn.buyerName}</div></div>
+                <div><div className="text-gray-500 mb-0.5">Value</div><div className="font-bold text-gray-900 text-sm">{formatCurrency(txn.totalAmount)}</div></div>
+                <div>
+                  <div className="text-gray-500 mb-0.5">Status</div>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 inline-block">
+                    {txn.status.replace(/_/g, ' ')}
+                  </span>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
 
           {/* Proof of delivery */}
           {job.proofOfDelivery && (
-            <Card>
-              <CardHeader><h2 className="font-semibold text-gray-800">Proof of Delivery</h2></CardHeader>
-              <CardContent>
-                <div className="px-3 py-3 bg-agri-50 border border-agri-200 rounded-lg space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-xs text-agri-700 font-semibold">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Delivery Evidence Recorded
-                  </div>
-                  <div><span className="text-xs text-gray-500">Received by: </span><span className="text-xs font-medium">{job.proofOfDelivery.recipientName}</span></div>
-                  <div><span className="text-xs text-gray-500">Note: </span><span className="text-xs">{job.proofOfDelivery.deliveryNote}</span></div>
-                  <div className="text-xs text-gray-400">{formatDateTime(job.proofOfDelivery.timestamp)}</div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Proof of Delivery</h2>
+              <div className="px-3 py-3 bg-green-50 border border-green-200 rounded-lg space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs text-green-700 font-semibold">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Delivery Evidence Recorded
                 </div>
-              </CardContent>
-            </Card>
+                <div className="text-xs"><span className="text-gray-500">Received by: </span><span className="font-medium text-gray-800">{job.proofOfDelivery.recipientName}</span></div>
+                <div className="text-xs"><span className="text-gray-500">Note: </span><span className="text-gray-700">{job.proofOfDelivery.deliveryNote}</span></div>
+                <div className="text-xs text-gray-400">{formatDateTime(job.proofOfDelivery.timestamp)}</div>
+              </div>
+            </div>
           )}
         </div>
       </div>
 
       {/* Proof of delivery modal */}
-      <Modal open={showPodModal} onClose={() => setShowPodModal(false)} title="Proof of Delivery">
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600">Record delivery details before marking the shipment as delivered.</p>
-          <Input
-            label="Recipient Name" required
-            value={pod.recipientName}
-            onChange={(e) => setPod((p) => ({ ...p, recipientName: e.target.value }))}
-            placeholder="Name of person who received the goods"
-          />
-          <Textarea
-            label="Delivery Note" required
-            value={pod.deliveryNote}
-            onChange={(e) => setPod((p) => ({ ...p, deliveryNote: e.target.value }))}
-            rows={3}
-            placeholder="Condition of goods, any notes on delivery..."
-          />
-          <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
-            A delivery timestamp will be automatically recorded.
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setShowPodModal(false)}>Cancel</Button>
-            <Button loading={loading} icon={<CheckCircle2 className="w-4 h-4" />} onClick={handleDeliver}>
-              Mark Delivered
-            </Button>
+      {showPodModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowPodModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-900">Proof of Delivery</h2>
+              <button type="button" onClick={() => setShowPodModal(false)} className="p-1 rounded-md hover:bg-gray-100 text-gray-500 text-lg leading-none">✕</button>
+            </div>
+            <p className="text-xs text-gray-600">Record delivery details before marking the shipment as delivered.</p>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Recipient Name <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
+                value={pod.recipientName}
+                onChange={(e) => setPod((p) => ({ ...p, recipientName: e.target.value }))}
+                placeholder="Name of person who received the goods"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Delivery Note <span className="text-red-500">*</span></label>
+              <textarea
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none resize-none"
+                value={pod.deliveryNote}
+                onChange={(e) => setPod((p) => ({ ...p, deliveryNote: e.target.value }))}
+                rows={3}
+                placeholder="Condition of goods, any notes on delivery..."
+              />
+            </div>
+            <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+              A delivery timestamp will be automatically recorded.
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowPodModal(false)}
+                className="px-3 py-2 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleDeliver}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                Mark Delivered
+              </button>
+            </div>
           </div>
         </div>
-      </Modal>
+      )}
     </div>
   );
 }

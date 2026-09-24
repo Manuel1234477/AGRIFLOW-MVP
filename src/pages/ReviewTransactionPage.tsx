@@ -207,7 +207,7 @@ export function ReviewTransactionPage() {
               type="button"
               disabled={sending}
               onClick={handleSendRequest}
-              className="w-full py-2.5 px-4 text-xs font-medium text-white bg-agri-700 hover:bg-agri-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
+              className="w-full py-2.5 px-4 text-xs font-medium text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
             >
               {sending ? 'Sending request...' : 'Send request to supplier'}
             </button>

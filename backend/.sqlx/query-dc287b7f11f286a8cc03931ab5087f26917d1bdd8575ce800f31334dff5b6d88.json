@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE transactions SET logistics_job_id = $2 WHERE id = $1 AND logistics_job_id IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dc287b7f11f286a8cc03931ab5087f26917d1bdd8575ce800f31334dff5b6d88"
+}

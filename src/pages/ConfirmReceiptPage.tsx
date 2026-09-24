@@ -216,7 +216,7 @@ export function ConfirmReceiptPage() {
                   type="checkbox"
                   checked={qtyChecked}
                   onChange={(e) => setQtyChecked(e.target.checked)}
-                  className="mt-0.5 accent-agri-700 w-4 h-4 rounded"
+                  className="mt-0.5 accent-gray-900 w-4 h-4 rounded"
                 />
                 <div>
                   <div className="font-semibold text-gray-900">Quantity matches the order</div>
@@ -229,7 +229,7 @@ export function ConfirmReceiptPage() {
                   type="checkbox"
                   checked={qualityChecked}
                   onChange={(e) => setQualityChecked(e.target.checked)}
-                  className="mt-0.5 accent-agri-700 w-4 h-4 rounded"
+                  className="mt-0.5 accent-gray-900 w-4 h-4 rounded"
                 />
                 <div>
                   <div className="font-semibold text-gray-900">Quality matches the agreed grade</div>
@@ -242,7 +242,7 @@ export function ConfirmReceiptPage() {
                   type="checkbox"
                   checked={undamagedChecked}
                   onChange={(e) => setUndamagedChecked(e.target.checked)}
-                  className="mt-0.5 accent-agri-700 w-4 h-4 rounded"
+                  className="mt-0.5 accent-gray-900 w-4 h-4 rounded"
                 />
                 <div>
                   <div className="font-semibold text-gray-900">Goods are undamaged</div>
@@ -284,7 +284,7 @@ export function ConfirmReceiptPage() {
                 type="button"
                 disabled={!canConfirm || isReleasing || completed}
                 onClick={handleConfirmRelease}
-                className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-agri-700 hover:bg-agri-800 rounded-lg transition-colors shadow-xs disabled:opacity-40 inline-flex items-center justify-center gap-2"
+                className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs disabled:opacity-40 inline-flex items-center justify-center gap-2"
               >
                 {isReleasing ? (
                   <>

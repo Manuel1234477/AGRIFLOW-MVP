@@ -1,9 +1,11 @@
+pub mod admin;
 pub mod auth;
 pub mod demands;
 pub mod listings;
+pub mod logistics;
 pub mod transactions;
 
-use axum::{Router, routing::{get, post}};
+use axum::{Router, routing::{get, patch, post}};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
@@ -13,7 +15,10 @@ pub fn build(state: AppState) -> Router {
     let api = Router::new()
         .route("/auth/register", post(auth::register))
         .route("/auth/login", post(auth::login))
+        .route("/auth/admin/login", post(auth::admin_login))
         .route("/auth/me", get(auth::me))
+        .route("/admin/users", get(admin::list_users))
+        .route("/admin/users/{id}/verify", patch(admin::set_verified))
         .route("/listings", get(listings::list_active).post(listings::create))
         .route("/listings/mine", get(listings::mine))
         .route("/listings/{id}", get(listings::get_one).patch(listings::update))
@@ -23,8 +28,14 @@ pub fn build(state: AppState) -> Router {
         .route("/transactions", get(transactions::list_mine).post(transactions::create))
         .route("/transactions/{id}", get(transactions::get_one))
         .route("/transactions/{id}/transition", post(transactions::transition))
+        .route("/transactions/{id}/payment", get(transactions::get_payment))
+        .route("/transactions/{id}/payment/initiate", post(transactions::initiate_payment))
         .route("/transactions/{id}/payment/confirm", post(transactions::mock_confirm_payment))
         .route("/transactions/{id}/payment/fail", post(transactions::mock_fail_payment))
+        .route("/logistics/jobs", get(logistics::list_jobs))
+        .route("/logistics/jobs/{id}/claim", post(logistics::claim_job))
+        .route("/logistics/jobs/{id}/assign", post(logistics::assign_job))
+        .route("/logistics/jobs/{id}/status", patch(logistics::update_status))
         .with_state(state);
 
     Router::new()

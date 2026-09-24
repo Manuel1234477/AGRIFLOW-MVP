@@ -150,6 +150,50 @@ pub async fn login(
     }))
 }
 
+/// Dedicated admin login (issue #33). Deliberately reuses the same
+/// Argon2 verify_password the rest of the app uses, not bcrypt as the
+/// issue's own spec literally says -- admin accounts are created through
+/// the same `register` handler as everyone else, which hashes with
+/// Argon2, so a bcrypt-only login path could never actually verify an
+/// admin's real password. This endpoint's only difference from `login` is
+/// that it rejects non-admin credentials with the same generic message
+/// used for a wrong password, so a probe can't distinguish "wrong
+/// password" from "not an admin account".
+pub async fn admin_login(
+    State(state): State<AppState>,
+    Json(body): Json<LoginRequest>,
+) -> AppResult<Json<AuthResponse>> {
+    let user = sqlx::query_as!(
+        User,
+        r#"
+        SELECT id, email, password_hash, name, role as "role: _", organization_name, phone, location, verified, profile_complete, created_at, updated_at
+        FROM users WHERE lower(email) = lower($1)
+        "#,
+        body.email
+    )
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| AppError::Unauthorized("Invalid email or password.".into()))?;
+
+    if !verify_password(&user.password_hash, &body.password)? || user.role != UserRole::Admin {
+        return Err(AppError::Unauthorized("Invalid email or password.".into()));
+    }
+
+    let token = issue_token(
+        &state.config.jwt_secret,
+        state.config.jwt_expiry_hours,
+        &user.id,
+        user.role,
+        &user.name,
+        &user.email,
+    )?;
+
+    Ok(Json(AuthResponse {
+        token,
+        user: UserPublic::from(user),
+    }))
+}
+
 pub async fn me(State(state): State<AppState>, auth: AuthUser) -> AppResult<Json<UserPublic>> {
     let user = sqlx::query_as!(
         User,

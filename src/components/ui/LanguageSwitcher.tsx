@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Globe, ChevronDown, Check } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
+import type { Locale } from '../../i18n/translations';
 
 const LANGUAGES = [
   { code: 'en',   label: 'English',    flag: '🇬🇧' },
@@ -28,18 +30,24 @@ function getStoredLang(): string {
 function setTranslateCookies(code: string) {
   const hostname = window.location.hostname;
   const isEn = !code || code === 'en';
+  const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
 
   if (isEn) {
-    // Clear all google translate cookies
     document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-    document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${hostname};`;
-    document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.${hostname};`;
     document.cookie = 'googtrans=/en/en; path=/;';
+    if (!isLocal) {
+      document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${hostname};`;
+      document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.${hostname};`;
+      document.cookie = `googtrans=/en/en; path=/; domain=${hostname};`;
+      document.cookie = `googtrans=/en/en; path=/; domain=.${hostname};`;
+    }
     localStorage.setItem('agriflow_lang', 'en');
   } else {
     document.cookie = `googtrans=/en/${code}; path=/;`;
-    document.cookie = `googtrans=/en/${code}; path=/; domain=${hostname};`;
-    document.cookie = `googtrans=/en/${code}; path=/; domain=.${hostname};`;
+    if (!isLocal) {
+      document.cookie = `googtrans=/en/${code}; path=/; domain=${hostname};`;
+      document.cookie = `googtrans=/en/${code}; path=/; domain=.${hostname};`;
+    }
     localStorage.setItem('agriflow_lang', code);
   }
 }
@@ -50,12 +58,11 @@ function triggerTranslate(code: string) {
 
   const select = document.querySelector<HTMLSelectElement>('.goog-te-combo');
   if (select) {
-    if (isEn) {
-      select.value = '';
-    } else {
-      select.value = code;
-    }
-    select.dispatchEvent(new Event('change'));
+    select.value = isEn ? '' : code;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  } else {
+    // If Google Translate is not yet initialized or script was delayed, reload to let cookie apply
+    window.location.reload();
   }
 
   if (isEn) {
@@ -64,6 +71,7 @@ function triggerTranslate(code: string) {
 }
 
 export function LanguageSwitcher({ variant = 'dark' }: LanguageSwitcherProps) {
+  const { setLocale } = useLanguage();
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState('en');
   const ref = useRef<HTMLDivElement>(null);
@@ -83,6 +91,11 @@ export function LanguageSwitcher({ variant = 'dark' }: LanguageSwitcherProps) {
   const handleSelect = (code: string) => {
     setCurrent(code);
     setOpen(false);
+    if (code === 'en' || code === 'yo' || code === 'ha' || code === 'pcm') {
+      try {
+        setLocale(code as Locale);
+      } catch {}
+    }
     triggerTranslate(code);
   };
 

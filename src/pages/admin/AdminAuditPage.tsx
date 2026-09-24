@@ -4,7 +4,7 @@ import { BookOpen } from 'lucide-react';
 
 const ACTION_COLORS: Record<string, string> = {
   transaction_initiated: 'bg-blue-100 text-blue-700',
-  transaction_accepted: 'bg-agri-100 text-agri-700',
+  transaction_accepted: 'bg-green-100 text-green-700',
   transaction_rejected: 'bg-red-100 text-red-700',
   payment_initiated: 'bg-orange-100 text-orange-700',
   payment_confirmed: 'bg-emerald-100 text-emerald-700',
@@ -16,11 +16,11 @@ const ACTION_COLORS: Record<string, string> = {
   shipment_picked_up: 'bg-sky-100 text-sky-700',
   shipment_in_transit: 'bg-violet-100 text-violet-700',
   shipment_delivered: 'bg-teal-100 text-teal-700',
-  delivery_confirmed: 'bg-agri-100 text-agri-700',
-  transaction_completed: 'bg-agri-100 text-agri-700',
+  delivery_confirmed: 'bg-green-100 text-green-700',
+  transaction_completed: 'bg-green-100 text-green-700',
   dispute_raised: 'bg-red-100 text-red-700',
-  dispute_resolved: 'bg-agri-100 text-agri-700',
-  supply_created: 'bg-agri-100 text-agri-700',
+  dispute_resolved: 'bg-green-100 text-green-700',
+  supply_created: 'bg-green-100 text-green-700',
   demand_created: 'bg-blue-100 text-blue-700',
   match_generated: 'bg-purple-100 text-purple-700',
   user_registered: 'bg-gray-100 text-gray-700',
@@ -31,7 +31,7 @@ export function AdminAuditPage() {
   const events = auditService.getAll();
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="max-w-5xl mx-auto space-y-5">
       <div className="flex items-center gap-3 mb-6">
         <BookOpen className="w-5 h-5 text-gray-600" />
         <h1 className="text-2xl font-bold text-gray-900">Audit Trail ({events.length} events)</h1>

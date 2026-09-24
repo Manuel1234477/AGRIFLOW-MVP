@@ -6,7 +6,7 @@ import type { User } from '../../types';
 
 const ROLE_COLORS: Record<string, string> = {
   buyer: 'bg-blue-100 text-blue-700',
-  supplier: 'bg-agri-100 text-agri-700',
+  supplier: 'bg-green-100 text-green-700',
   logistics: 'bg-violet-100 text-violet-700',
   admin: 'bg-gray-100 text-gray-700',
 };
@@ -20,7 +20,7 @@ export function AdminUsersPage() {
 
   if (sorted.length === 0) {
     return (
-      <div className="p-6 max-w-5xl mx-auto">
+      <div className="max-w-5xl mx-auto space-y-5">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Users</h1>
         <EmptyState
           icon={<Users className="w-7 h-7" />}
@@ -32,7 +32,7 @@ export function AdminUsersPage() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto space-y-5">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Users ({users.length})</h1>
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
@@ -52,7 +52,7 @@ export function AdminUsersPage() {
                 <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-agri-100 flex items-center justify-center text-agri-700 font-bold text-xs">
+                      <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs">
                         {u.name[0]}
                       </div>
                       <div>

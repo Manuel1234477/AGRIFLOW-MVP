@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE logistics_jobs SET\n            status = $2,\n            proof_of_delivery = COALESCE($3, proof_of_delivery),\n            updated_at = now()\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ba9f8434be1b842cd2e714e929dbc6ca451564f4d459cd54a222558b7f8a67c4"
+}

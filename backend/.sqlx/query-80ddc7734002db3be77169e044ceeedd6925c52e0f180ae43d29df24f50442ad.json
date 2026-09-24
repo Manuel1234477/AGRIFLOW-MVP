@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO transaction_events (transaction_id, status, actor, actor_role, note)\n        VALUES ($1, 'PENDING', $2, 'buyer', 'Transaction initiated by buyer.')\n        RETURNING id, transaction_id, status, actor, actor_role, note, created_at\n        ",
+  "query": "\n            INSERT INTO transaction_events (transaction_id, status, actor, actor_role, note)\n            VALUES ($1, 'PENDING', $2, 'buyer', 'Transaction initiated by buyer.')\n            RETURNING id, transaction_id, status, actor, actor_role, note, created_at\n            ",
   "describe": {
     "columns": [
       {
@@ -97,5 +97,5 @@
       false
     ]
   },
-  "hash": "186deb9dd0e80d79309bfdfb6fab26a42521007122aed1c52910a1e836e4374a"
+  "hash": "80ddc7734002db3be77169e044ceeedd6925c52e0f180ae43d29df24f50442ad"
 }

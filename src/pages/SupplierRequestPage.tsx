@@ -135,7 +135,7 @@ export function SupplierRequestPage() {
               Buyer
             </h2>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-agri-50 border border-agri-200 flex items-center justify-center font-bold text-agri-800">
+              <div className="w-10 h-10 rounded-lg bg-green-50 border border-green-200 flex items-center justify-center font-bold text-gray-900">
                 {txn?.buyerName?.[0] || 'K'}
               </div>
               <div>
@@ -196,7 +196,7 @@ export function SupplierRequestPage() {
                 <span>Committed for this order</span>
                 <span className="font-medium">{quantity} {unit}</span>
               </div>
-              <div className="flex justify-between py-1 text-agri-800 font-semibold">
+              <div className="flex justify-between py-1 text-gray-900 font-semibold">
                 <span>Remaining balance</span>
                 <span>{listing ? `${Math.max(0, listing.quantity - quantity)} ${listing.unit}` : `6 ${unit}`}</span>
               </div>
@@ -222,7 +222,7 @@ export function SupplierRequestPage() {
               </div>
               <div className="flex justify-between text-sm font-bold text-gray-900 pt-3 border-t border-gray-100">
                 <span>Net Payout</span>
-                <span className="text-agri-700">{formatCurrency(totalAmount)}</span>
+                <span className="text-gray-900">{formatCurrency(totalAmount)}</span>
               </div>
             </div>
 
@@ -232,7 +232,7 @@ export function SupplierRequestPage() {
                   type="button"
                   disabled={acting}
                   onClick={handleAccept}
-                  className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-agri-700 hover:bg-agri-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
+                  className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
                 >
                   {acting ? 'Processing...' : 'Accept transaction request'}
                 </button>
@@ -246,7 +246,7 @@ export function SupplierRequestPage() {
                 </button>
               </div>
             ) : (
-              <div className="pt-2 text-center text-xs font-semibold text-agri-800 bg-agri-50 p-2.5 rounded-lg border border-agri-200">
+              <div className="pt-2 text-center text-xs font-semibold text-gray-900 bg-green-50 p-2.5 rounded-lg border border-green-200">
                 Status: {txn?.status?.replace(/_/g, ' ') || 'ACCEPTED'}
               </div>
             )}

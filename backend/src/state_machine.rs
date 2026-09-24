@@ -112,10 +112,16 @@ impl TransactionStatus {
             Accepted => Some(&[Supplier]),
             Rejected => Some(&[Supplier]),
             PaymentPending => Some(&[Buyer, System]),
-            PaymentConfirmed => Some(&[Buyer, System, Admin]),
-            PaymentFailed => Some(&[Buyer, System, Admin]),
-            PaymentCancelled => Some(&[Buyer, System, Admin]),
-            LogisticsPending => Some(&[Buyer, System, Admin]),
+            // Payment settlement must be driven by the server, never
+            // self-reported by the payer -- see API_AUDIT.md and the
+            // payments punch list. A buyer being allowed here means any
+            // buyer can mark their own payment "confirmed" with a single
+            // API call and no proof money ever moved. Only the mock-escrow
+            // endpoints (which run as Actor::System) may drive these.
+            PaymentConfirmed => Some(&[System]),
+            PaymentFailed => Some(&[System]),
+            PaymentCancelled => Some(&[Buyer]),
+            LogisticsPending => Some(&[System]),
             LogisticsAssigned => Some(&[Admin, System, Logistics]),
             LogisticsAccepted => Some(&[Logistics, System, Admin]),
             LogisticsRejected => Some(&[Logistics, System, Admin]),
@@ -318,5 +324,30 @@ mod tests {
             let check = can_actor_transition(TransactionStatus::LogisticsAccepted, to, Actor::Buyer);
             assert!(!check.allowed, "buyer should not drive {to}");
         }
+    }
+
+    /// Regression guard: this exact gate was loosened once already (a buyer
+    /// could self-confirm their own payment via the generic transition
+    /// endpoint, with no proof money ever moved -- see the payments punch
+    /// list). Payment settlement must only ever be driven server-side.
+    #[test]
+    fn buyer_cannot_self_confirm_or_fail_payment() {
+        for to in [TransactionStatus::PaymentConfirmed, TransactionStatus::PaymentFailed] {
+            let check = can_actor_transition(TransactionStatus::PaymentPending, to, Actor::Buyer);
+            assert!(!check.allowed, "buyer must not be able to self-report payment as {to}");
+
+            let check = can_actor_transition(TransactionStatus::PaymentPending, to, Actor::System);
+            assert!(check.allowed, "system must still be able to settle payment as {to}");
+        }
+    }
+
+    #[test]
+    fn buyer_cannot_self_drive_logistics_pending() {
+        let check = can_actor_transition(
+            TransactionStatus::PaymentConfirmed,
+            TransactionStatus::LogisticsPending,
+            Actor::Buyer,
+        );
+        assert!(!check.allowed);
     }
 }

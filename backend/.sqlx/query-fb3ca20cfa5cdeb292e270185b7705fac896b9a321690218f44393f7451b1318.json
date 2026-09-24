@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO transactions\n            (id, listing_id, demand_id, buyer_id, buyer_name, supplier_id, supplier_name,\n             commodity, quantity, unit, quality_grade, price_per_unit, total_amount, currency,\n             pickup_location, delivery_location, expected_delivery_date, status)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'PENDING')\n        RETURNING id, listing_id, demand_id, buyer_id, buyer_name, supplier_id, supplier_name,\n                  commodity, quantity, unit, quality_grade, price_per_unit, total_amount, currency,\n                  pickup_location, delivery_location, expected_delivery_date, status, payment_id,\n                  logistics_job_id, dispute_id, created_at, updated_at\n        ",
+  "query": "\n            INSERT INTO transactions\n                (id, listing_id, demand_id, buyer_id, buyer_name, supplier_id, supplier_name,\n                 commodity, quantity, unit, quality_grade, price_per_unit, total_amount, currency,\n                 pickup_location, delivery_location, expected_delivery_date, status)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'PENDING')\n            RETURNING id, listing_id, demand_id, buyer_id, buyer_name, supplier_id, supplier_name,\n                      commodity, quantity, unit, quality_grade, price_per_unit, total_amount, currency,\n                      pickup_location, delivery_location, expected_delivery_date, status, payment_id,\n                      logistics_job_id, dispute_id, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -304,5 +304,5 @@
       false
     ]
   },
-  "hash": "a4064ba92601605cfaee58bf5a7e672472183debfc9e8c1fbc8a847a45f36ede"
+  "hash": "fb3ca20cfa5cdeb292e270185b7705fac896b9a321690218f44393f7451b1318"
 }

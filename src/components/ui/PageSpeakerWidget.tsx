@@ -245,7 +245,7 @@ export function PageSpeakerWidget() {
   return (
     <div
       id="speech-widget"
-      className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2"
+      className="fixed bottom-20 md:bottom-5 right-5 z-40 flex flex-col items-end gap-2"
     >
       {/* Expanded Control Box */}
       {isExpanded && (

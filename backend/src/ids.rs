@@ -34,3 +34,11 @@ pub fn user_id(role: &str) -> String {
     };
     generate(prefix)
 }
+
+/// A synthetic settlement reference for the mock escrow provider, in the
+/// same shape the original frontend-only implementation used.
+pub fn provider_reference() -> String {
+    let date = chrono::Utc::now().format("%Y%m%d");
+    let rand: u32 = rand::rng().random_range(100_000..900_000);
+    format!("AF-PAY-{date}-{rand}")
+}

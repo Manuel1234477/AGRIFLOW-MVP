@@ -129,7 +129,7 @@ export function CreateDemandPage() {
                   <select
                     value={commodity}
                     onChange={(e) => setCommodity(e.target.value as CommodityType)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-1 focus:ring-agri-700 focus:border-agri-700 outline-none"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
                   >
                     <option value="maize">White Maize</option>
                     <option value="soybean">Soybean</option>
@@ -146,7 +146,7 @@ export function CreateDemandPage() {
                   <select
                     value={grade}
                     onChange={(e) => setGrade(e.target.value as QualityGrade)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-1 focus:ring-agri-700 focus:border-agri-700 outline-none"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
                   >
                     <option value="A">Grade A</option>
                     <option value="B">Grade B</option>
@@ -168,7 +168,7 @@ export function CreateDemandPage() {
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
                     placeholder="e.g. 12"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-agri-700 focus:border-agri-700 outline-none"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
                   />
                 </div>
 
@@ -179,7 +179,7 @@ export function CreateDemandPage() {
                   <select
                     value={unit}
                     onChange={(e) => setUnit(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-agri-700 focus:border-agri-700 outline-none bg-white text-gray-900 cursor-pointer"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none bg-white text-gray-900 cursor-pointer"
                   >
                     <option value="tonnes">Tonnes (MT)</option>
                     <option value="bags (50kg)">Bags (50kg)</option>
@@ -202,7 +202,7 @@ export function CreateDemandPage() {
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder="Address or LGA (e.g. Ikeja, Lagos)"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-agri-700 focus:border-agri-700 outline-none"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
                 />
               </div>
 
@@ -215,7 +215,7 @@ export function CreateDemandPage() {
                   required
                   value={neededBy}
                   onChange={(e) => setNeededBy(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-agri-700 focus:border-agri-700 outline-none"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
                 />
               </div>
 
@@ -229,14 +229,14 @@ export function CreateDemandPage() {
                     value={budgetMin}
                     onChange={(e) => setBudgetMin(e.target.value)}
                     placeholder="Minimum (₦)"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-agri-700 focus:border-agri-700 outline-none"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
                   />
                   <input
                     type="number"
                     value={budgetMax}
                     onChange={(e) => setBudgetMax(e.target.value)}
                     placeholder="Maximum (₦)"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-agri-700 focus:border-agri-700 outline-none"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
                   />
                 </div>
               </div>
@@ -250,7 +250,7 @@ export function CreateDemandPage() {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Packaging, handling or timing requirements…"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-agri-700 focus:border-agri-700 outline-none"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
                 />
               </div>
 
@@ -331,7 +331,7 @@ export function CreateDemandPage() {
               type="button"
               disabled={loading}
               onClick={handleSubmitDemand}
-              className="px-5 py-2 text-xs font-medium text-white bg-agri-700 hover:bg-agri-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
+              className="px-5 py-2 text-xs font-medium text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
             >
               {loading ? 'Submitting & Matching...' : 'Submit & Find Matches'}
             </button>

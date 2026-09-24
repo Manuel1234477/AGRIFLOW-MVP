@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO logistics_jobs\n            (id, transaction_id, commodity, quantity, unit, pickup_location, delivery_location,\n             pickup_date, expected_delivery_date, logistics_cost, currency, status)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8, $9, $10, 'PENDING')\n        ON CONFLICT (transaction_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Numeric",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Numeric",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1e373ba362fd211105494f72b56515203e0bfb93a92979dafbbd25e9fb48e226"
+}

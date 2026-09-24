@@ -130,6 +130,46 @@ export const paymentService = {
     return payment;
   },
 
+  // Backed by POST /transactions/:id/payment/bachs/checkout-session.
+  // Creates the Bachs hosted checkout session server-side -- the API
+  // secret key never reaches the browser (unlike the old direct-to-Bachs
+  // client this replaces, src/lib/bachs.ts). Requires initiate() to have
+  // been called first, same as confirm()/fail().
+  async createBachsCheckoutSession(transactionId: string): Promise<{ checkoutUrl: string }> {
+    const origin = typeof window !== 'undefined' ? window.location.origin : undefined;
+    const successUrl = origin ? `${origin}/app/transactions/${transactionId}?payment=success` : undefined;
+    const cancelUrl = origin ? `${origin}/app/transactions/${transactionId}/pay?payment=cancelled` : undefined;
+    return apiFetch<{ checkoutUrl: string }>(
+      `/api/transactions/${transactionId}/payment/bachs/checkout-session`,
+      { method: 'POST', body: JSON.stringify({ successUrl, cancelUrl }) },
+    );
+  },
+
+  // Polls the backend until the payment reaches a terminal state
+  // (CONFIRMED/FAILED) or the timeout elapses. Use this after returning
+  // from a hosted checkout redirect instead of trusting the redirect's own
+  // `?payment=success` query param -- that param carries no authority on
+  // its own; only the backend's webhook-verified state does. A buyer could
+  // navigate straight to the "success" URL without ever paying, so acting
+  // on the param directly would reopen the exact hole the Bachs webhook
+  // was built to close.
+  async pollUntilSettled(
+    transactionId: string,
+    { intervalMs = 1500, timeoutMs = 60_000 }: { intervalMs?: number; timeoutMs?: number } = {},
+  ): Promise<Payment | null> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const payment = await this.fetchForTransaction(transactionId);
+      if (payment && (payment.status === 'CONFIRMED' || payment.status === 'FAILED')) {
+        return payment;
+      }
+      if (Date.now() >= deadline) {
+        return payment;
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+  },
+
   getForTransaction(transactionId: string): Payment | null {
     const all = storageService.get<Payment[]>(STORE_KEYS.PAYMENTS) ?? [];
     return all.find((p) => p.transactionId === transactionId) ?? null;

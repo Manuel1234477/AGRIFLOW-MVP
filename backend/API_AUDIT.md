@@ -62,13 +62,43 @@ JSON numbers; `POST /listings` still accepts and round-trips correctly.
 The frontend's `apiMappers.ts` coercion (`num()`) is unaffected — it
 already tolerates receiving real numbers instead of strings.
 
-### 3. The trade lifecycle dead-ends at `PAYMENT_PENDING`
-Confirmed structurally, not just by the "not built yet" note in
-`README.md`: `PAYMENT_CONFIRMED` only accepts the `system` actor in
-`src/state_machine.rs`, and no endpoint can authenticate as `system`. No
-client — not even admin — can move a transaction past payment-pending
-today. Nothing downstream (logistics, delivery, completion) is reachable
-until a payment/webhook endpoint exists.
+### 3. The trade lifecycle dead-ends at `PAYMENT_PENDING` — ✅ FIXED, then partly regressed, now re-fixed (2026-09-24)
+Originally: `PAYMENT_CONFIRMED` only accepted the `system` actor, and no
+endpoint could authenticate as `system`, so no client could move a
+transaction past payment-pending. Fixed by an earlier commit
+(`mock_confirm_payment`/`mock_fail_payment`, buyer-scoped endpoints acting
+as `Actor::System` internally) — but that fix was undone by a later commit
+that loosened `PaymentConfirmed`/`PaymentFailed`/`PaymentCancelled`/
+`LogisticsPending` in `state_machine.rs` to allow `Buyer` directly. That
+meant **any buyer could self-confirm their own payment** via
+`POST /transactions/:id/transition {"to":"PAYMENT_CONFIRMED"}` — a live,
+provable exploit (verified: the exact call succeeded with `200` before this
+fix), since the backend never checked that money actually moved.
+
+Re-fixed by:
+- Restoring `PaymentConfirmed`/`PaymentFailed`/`LogisticsPending` to
+  `System`-only and `PaymentCancelled` to `Buyer`-only, with a doc comment
+  and two new regression tests (`buyer_cannot_self_confirm_or_fail_payment`,
+  `buyer_cannot_self_drive_logistics_pending`) so this can't silently
+  regress a third time.
+- Adding a real `payments` table (migration `0002_payments.sql`) — payments
+  were never persisted anywhere before this, only inferred from transaction
+  status.
+- A proper three-endpoint payment flow: `POST .../payment/initiate` (buyer,
+  idempotent, creates a `PENDING` row), `POST .../payment/confirm` (buyer,
+  settles it — amount/currency come only from the row `initiate` created,
+  never from the confirm request body, so a buyer can't "confirm" a lower
+  amount than they owed), `POST .../payment/fail`, `GET .../payment`.
+- A `stellar_tx_hash` column, so the Soroban escrow flow's on-chain
+  transaction hash has somewhere durable to live instead of only existing
+  in React state until the next page refresh.
+
+Verified: the self-confirm exploit now returns `409 A buyer cannot perform
+this action`; the full initiate → confirm (with a Stellar hash) → read
+flow persists correctly; a second buyer/supplier cannot touch another
+buyer's payment (`403`); confirming an already-settled payment twice is a
+clean idempotent `200`, not a `409` (a pre-existing bug surfaced by this
+work, fixed alongside it). `cargo test` passes (10 tests, 4 new).
 
 ### 4. Entity ID generation has an unhandled collision window — ✅ FIXED (2026-09-24)
 `src/ids.rs::generate()` draws a random 5-digit suffix (`10_000..99_999`,

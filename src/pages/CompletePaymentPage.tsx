@@ -11,7 +11,6 @@ import { useApp } from '../context/AppContext';
 import { useToast } from '../components/ui/Toast';
 import { transactionService } from '../services/transactionService';
 import { paymentService } from '../services/paymentService';
-import { createBachsCheckoutSession } from '../lib/bachs';
 import { UsdcDepositModal } from '../components/wallet/UsdcDepositModal';
 import { type UsdcDepositQuote } from '../lib/nearIntents';
 import { useUsdcNgnRate } from '../services/fxRateService';
@@ -62,30 +61,30 @@ export function CompletePaymentPage() {
   const totalDueNgn = goodsSubtotalNgn + logisticsCostNgn + platformFeeNgn;
   const totalDueUsdc = Number((totalDueNgn / usdcRate).toFixed(2));
 
-  // Handle return from Bachs Hosted Checkout
+  // Handle return from Bachs Hosted Checkout. The `?payment=success` query
+  // param carries no authority on its own -- a buyer could navigate
+  // straight to this URL without ever paying. The backend's
+  // mock_confirm_payment already refuses to confirm a Bachs-sourced
+  // payment directly (409) for exactly this reason: only its
+  // signature-verified webhook can settle one. So this polls for the
+  // real, webhook-driven outcome instead of trusting the redirect.
   useEffect(() => {
     const paymentStatus = searchParams.get('payment');
     if (paymentStatus === 'success' && tx && session) {
       const confirmBachsReturn = async () => {
         setPaying(true);
         try {
-          let p = paymentService.getForTransaction(tx.id);
-          if (!p) {
-            p = await paymentService.initiate({
-              transactionId: tx.id,
-              payerId: session.userId,
-              payerName: session.name,
-              amount: totalDueNgn,
-              currency: 'NGN',
-            });
+          const payment = await paymentService.pollUntilSettled(tx.id);
+          if (payment?.status === 'CONFIRMED') {
+            toast('success', 'Payment confirmed! Funds secured in escrow.');
+          } else if (payment?.status === 'FAILED') {
+            toast('error', payment.failureReason || 'Payment failed.');
+          } else {
+            toast('info', "Still waiting for Bachs to confirm this payment -- check back shortly.");
           }
-          if (p && p.status !== 'CONFIRMED') {
-            await paymentService.confirm(p.id, session.userId, session.name);
-          }
-          toast('success', `Payment confirmed! Funds secured in escrow.`);
           navigate(`/app/transactions/${tx.id}`, { replace: true });
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Error confirming payment.';
+          const msg = err instanceof Error ? err.message : 'Error checking payment status.';
           toast('error', msg);
         } finally {
           setPaying(false);
@@ -95,7 +94,7 @@ export function CompletePaymentPage() {
     } else if (paymentStatus === 'cancelled') {
       toast('info', 'Checkout was cancelled.');
     }
-  }, [searchParams, tx, session, totalDueNgn, navigate, toast]);
+  }, [searchParams, tx, session, navigate, toast]);
 
   const handlePayBachs = async () => {
     if (!session || !tx) return;
@@ -112,23 +111,12 @@ export function CompletePaymentPage() {
 
       toast('info', 'Opening secure checkout...');
 
-      const sessionData = await createBachsCheckoutSession({
-        transactionId: tx.id,
-        amount: totalDueNgn,
-        currency: 'NGN',
-        customer: {
-          email: session.email || 'buyer@agriflow.africa',
-          name: session.name || 'AgriFlow Buyer',
-        },
-        description: `AgriFlow Escrow: ${formatCommodity(tx.commodity)} (${tx.quantity} ${tx.unit})`,
-        metadata: {
-          transaction_id: tx.id,
-          buyer_id: session.userId,
-        },
-      });
+      // Session creation happens server-side now -- the API secret key
+      // never reaches the browser (see src/services/paymentService.ts).
+      const sessionData = await paymentService.createBachsCheckoutSession(tx.id);
 
-      if (sessionData && sessionData.url) {
-        window.location.href = sessionData.url;
+      if (sessionData && sessionData.checkoutUrl) {
+        window.location.href = sessionData.checkoutUrl;
       } else {
         throw new Error('No checkout URL returned.');
       }

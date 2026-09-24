@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO users (id, email, password_hash, name, role, verified, profile_complete)\n        VALUES ('USR-ADM-00001', 'admin@agriflow.africa', $1, 'AgriFlow System Administrator', 'admin', TRUE, TRUE)\n        ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, updated_at = now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c78d52942a7493526cdbcc55d0e6e8f16b8ea5c779cdef3496c2d20370d976d7"
+}

@@ -5,10 +5,24 @@ import { logisticsService } from '../services/logisticsService';
 import { transactionService } from '../services/transactionService';
 import { useApp } from '../context/AppContext';
 import { EmptyState } from '../components/ui/EmptyState';
-import { StatusBadge } from '../components/ui/StatusBadge';
 import { formatDate, formatCommodity } from '../utils/format';
 
 type DeliverableFilter = 'all' | 'in_transit' | 'delivered' | 'completed' | 'pending';
+
+const TXN_STATUS_STYLES: Record<string, string> = {
+  COMPLETED: 'bg-green-50 border-green-200 text-green-700',
+  IN_TRANSIT: 'bg-blue-50 border-blue-200 text-blue-700',
+  DELIVERED: 'bg-purple-50 border-purple-200 text-purple-700',
+  PAYMENT_PENDING: 'bg-amber-50 border-amber-200 text-amber-700',
+  PAYMENT_CONFIRMED: 'bg-green-50 border-green-200 text-green-700',
+  ACCEPTED: 'bg-blue-50 border-blue-200 text-blue-700',
+  READY_FOR_PICKUP: 'bg-indigo-50 border-indigo-200 text-indigo-700',
+  PICKED_UP: 'bg-sky-50 border-sky-200 text-sky-700',
+  DELIVERY_CONFIRMED: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+  DISPUTED: 'bg-red-50 border-red-200 text-red-700',
+  CANCELLED: 'bg-red-50 border-red-200 text-red-700',
+  REJECTED: 'bg-red-50 border-red-200 text-red-700',
+};
 
 export function ShipmentsPage() {
   const { session } = useApp();
@@ -85,7 +99,7 @@ export function ShipmentsPage() {
   );
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
@@ -113,7 +127,7 @@ export function ShipmentsPage() {
               onClick={() => setFilter(tab.id as DeliverableFilter)}
               className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
                 filter === tab.id
-                  ? 'bg-agri-700 text-white shadow-xs'
+                  ? 'bg-gray-900 text-white shadow-xs'
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
@@ -129,7 +143,7 @@ export function ShipmentsPage() {
             placeholder="Search deliverables…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-agri-700 focus:bg-white"
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-gray-900 focus:bg-white"
           />
         </div>
       </div>
@@ -147,7 +161,7 @@ export function ShipmentsPage() {
             return (
               <div
                 key={j.id}
-                className="bg-white border border-gray-200 rounded-xl p-5 shadow-xs hover:border-agri-400 transition-all space-y-4"
+                className="bg-white border border-gray-200 rounded-xl p-5 shadow-xs hover:border-gray-300 transition-all space-y-4"
               >
                 <div className="flex items-start justify-between">
                   <div>
@@ -162,7 +176,7 @@ export function ShipmentsPage() {
                     </div>
                   </div>
                   <div className="text-right flex flex-col items-end gap-1">
-                    {txn && <StatusBadge status={txn.status} size="sm" />}
+                    {txn && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border inline-block ${TXN_STATUS_STYLES[txn.status] ?? 'bg-gray-50 border-gray-200 text-gray-600'}`}>{txn.status.replace(/_/g,' ')}</span>}
                     <span className="text-[11px] font-semibold text-gray-500 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full">
                       {j.status.replace(/_/g, ' ')}
                     </span>
@@ -170,7 +184,7 @@ export function ShipmentsPage() {
                 </div>
 
                 <div className="flex items-center gap-1.5 text-xs text-gray-700">
-                  <MapPin className="w-3.5 h-3.5 text-agri-600 shrink-0" />
+                  <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                   <span className="font-medium">{j.pickupLocation}</span>
                   <span className="text-gray-400">→</span>
                   <span className="font-medium">{j.deliveryLocation}</span>
@@ -188,7 +202,7 @@ export function ShipmentsPage() {
                     <button
                       type="button"
                       onClick={() => navigate(`/app/transactions/${j.transactionId}/track`)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-agri-700 hover:bg-agri-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs cursor-pointer"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs cursor-pointer"
                     >
                       <Navigation className="w-3 h-3" />
                       Live GPS Map

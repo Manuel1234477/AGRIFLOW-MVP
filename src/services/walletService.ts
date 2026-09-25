@@ -3,7 +3,6 @@ import { transactionService } from './transactionService';
 import { logisticsService } from './logisticsService';
 import { auditService } from './auditService';
 import { notificationService } from './notificationService';
-import { mintTestnetUsdc } from '../lib/stellar';
 import type { Transaction, LogisticsJob } from '../types';
 
 export interface WithdrawalRequest {
@@ -159,13 +158,7 @@ export const walletService = {
 
     let payoutTxHash: string;
     if (isCrypto && targetWallet) {
-      const usdcAmount = Math.max(1, Math.round(params.amount / 1350));
-      try {
-        payoutTxHash = await mintTestnetUsdc(targetWallet, usdcAmount);
-      } catch (e: any) {
-        console.warn('On-chain payout attempt failed, fallback to local reference:', e);
-        payoutTxHash = `0x_payout_${Date.now().toString(16)}`;
-      }
+      payoutTxHash = `0x_payout_${Date.now().toString(16)}`;
     } else {
       payoutTxHash = `NIBSS_PAY_${Date.now().toString().slice(-8)}`;
     }

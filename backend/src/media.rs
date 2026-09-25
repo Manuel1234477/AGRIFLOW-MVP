@@ -193,6 +193,26 @@ pub async fn for_listings(db: &sqlx::PgPool, listing_ids: &[String]) -> sqlx::Re
     Ok(grouped)
 }
 
+/// Makes the listing's first photo (in display order) its cover if it has
+/// none -- after media is attached, or the cover is deleted or rejected.
+/// A concurrent call that set a cover first is not an error.
+pub async fn ensure_cover(db: &sqlx::PgPool, listing_id: &str) -> sqlx::Result<()> {
+    let result = sqlx::query!(
+        r#"UPDATE listing_media SET is_cover = TRUE, updated_at = now()
+           WHERE id = (SELECT id FROM listing_media
+                       WHERE listing_id = $1 AND kind = 'image' AND status IN ('processing', 'ready')
+                       ORDER BY sort_order, created_at LIMIT 1)
+             AND NOT EXISTS (SELECT 1 FROM listing_media WHERE listing_id = $1 AND is_cover)"#,
+        listing_id,
+    )
+    .execute(db)
+    .await;
+    match result {
+        Err(sqlx::Error::Database(e)) if e.is_unique_violation() => Ok(()),
+        other => other.map(|_| ()),
+    }
+}
+
 pub async fn load(db: &sqlx::PgPool, id: &str) -> sqlx::Result<Option<MediaRow>> {
     sqlx::query_as!(
         MediaRow,
@@ -333,14 +353,20 @@ async fn process(state: &AppState, media_id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A failed item can't stay the cover; the next photo takes over.
 async fn mark_failed(state: &AppState, id: &str, reason: &str) -> sqlx::Result<()> {
-    sqlx::query!(
-        "UPDATE listing_media SET status = 'failed', processing_error = $2, updated_at = now() WHERE id = $1",
+    let listing_id = sqlx::query_scalar!(
+        r#"UPDATE listing_media SET status = 'failed', processing_error = $2, is_cover = FALSE, updated_at = now()
+           WHERE id = $1 RETURNING listing_id"#,
         id,
         reason,
     )
-    .execute(&state.db)
-    .await?;
+    .fetch_optional(&state.db)
+    .await?
+    .flatten();
+    if let Some(listing_id) = listing_id {
+        ensure_cover(&state.db, &listing_id).await?;
+    }
     Ok(())
 }
 

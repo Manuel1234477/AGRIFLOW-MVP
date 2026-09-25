@@ -39,6 +39,14 @@ export function CreateSupplyPage() {
       toast('error', 'Please fill all required fields.');
       return;
     }
+    if (mediaList.some((m) => m.status === 'uploading')) {
+      toast('error', 'Please wait for your photos and videos to finish uploading.');
+      return;
+    }
+    if (mediaList.some((m) => m.status === 'failed')) {
+      toast('error', 'Some media failed to upload. Remove it (or re-add it) before publishing.');
+      return;
+    }
     setLoading(true);
     try {
       const photos = mediaList.filter((m) => m.type === 'image').map((m) => m.url);

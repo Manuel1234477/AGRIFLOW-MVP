@@ -1,6 +1,7 @@
 pub mod demand;
 pub mod dispute;
 pub mod listing;
+pub mod media;
 pub mod logistics;
 pub mod payment;
 pub mod transaction;

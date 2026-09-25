@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE listing_media SET is_cover = TRUE\n               WHERE id = (SELECT id FROM listing_media WHERE listing_id = $1 AND kind = 'image'\n                           ORDER BY sort_order LIMIT 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a720e0fd9e79de26ebfa28d170623b2f7b76e74c44f8a3433c3df1f82730c34c"
+}

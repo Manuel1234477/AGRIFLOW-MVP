@@ -182,11 +182,14 @@ export function ListingMediaViewer({
               }`}
             >
               {item.type === 'video' ? (
-                <div className="w-full h-full bg-gray-900 flex items-center justify-center text-white">
-                  <Play className="w-4 h-4 text-blue-400" />
+                <div className="relative w-full h-full bg-gray-900 flex items-center justify-center text-white">
+                  {item.thumbnailUrl && (
+                    <img src={item.thumbnailUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-70" />
+                  )}
+                  <Play className="relative w-4 h-4 text-blue-400" />
                 </div>
               ) : (
-                <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+                <img src={item.thumbnailUrl || item.url} alt={item.name} className="w-full h-full object-cover" />
               )}
             </button>
           ))}

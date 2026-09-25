@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE listing_media SET is_cover = FALSE, updated_at = now() WHERE listing_id = $1 AND is_cover AND id <> $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "58c10557e8fefafc7af7daeec56681ce15c73cdf84ed5463e3e9a03e6ccc7168"
+}

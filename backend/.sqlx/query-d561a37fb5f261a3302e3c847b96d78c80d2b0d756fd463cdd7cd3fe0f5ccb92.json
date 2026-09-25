@@ -1,0 +1,208 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, listing_id, uploader_id, kind, content_type, size_bytes, original_name,\n                  storage_key, variants, thumbnail_key, status, processing_error, caption,\n                  is_cover, sort_order, created_at\n           FROM listing_media\n           WHERE listing_id IS NULL AND status <> 'processing'\n             AND created_at < now() - make_interval(hours => $1)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "listing_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "listing_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "uploader_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "uploader_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "content_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "content_type"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "size_bytes",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "size_bytes"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "original_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "original_name"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "storage_key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "storage_key"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "variants",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "variants"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "thumbnail_key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "thumbnail_key"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "processing_error",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "processing_error"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "caption",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "caption"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "is_cover",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "is_cover"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "sort_order",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "sort_order"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "listing_media",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d561a37fb5f261a3302e3c847b96d78c80d2b0d756fd463cdd7cd3fe0f5ccb92"
+}

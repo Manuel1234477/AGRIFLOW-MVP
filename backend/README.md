@@ -80,8 +80,14 @@ All routes are under `/api`.
 | PATCH  | `/admin/users/:id/verify`     | admin          | `{ "verified": true \| false }` -- can un-verify, not just verify |
 | GET    | `/listings`                   | any            | `?commodity=&status=` (default `status=active`) |
 | GET    | `/listings/mine`               | supplier        | |
-| POST   | `/listings`                    | supplier        | |
+| POST   | `/listings`                    | supplier        | Optional `mediaIds: [...]` attaches uploads made before the listing existed, in that order; the first photo becomes the cover |
 | GET    | `/listings/:id`                | any             | |
+| POST   | `/media/presigned-url`         | supplier        | `{ filename, contentType, sizeBytes, listingId? }` → `{ mediaId, uploadUrl, method: "PUT", headers, expiresAt, key }`. JPEG/PNG/WebP ≤ 20 MB, MP4/WebM/MOV ≤ 80 MB. The URL expires in 15 min and is signed for that exact `Content-Type` and size. `listingId` (must be yours) attaches immediately; max 8 per listing, 20 unattached per supplier |
+| POST   | `/media/:id/complete`          | uploader or admin | Call after the PUT. Verifies the object and its size, then queues processing (`status: processing` → `ready`/`failed`). Idempotent |
+| GET    | `/media/:id`                   | uploader or admin | Status of one upload, for polling |
+| PATCH  | `/media/:id`                   | uploader or admin | `{ caption?, isCover?, sortOrder? }`. One cover per listing (photos only); `caption: ""` clears it |
+| DELETE | `/media/:id`                   | uploader or admin | Deletes the file and its renditions from the bucket, then the row. `204` |
+| GET    | `/media/:id/content`           | —               | `?variant=original` (default) \| `small` \| `large` \| `thumbnail`. `302` to a 1-hour presigned bucket URL, served as the validated type. Only uploaded media; `404` for pending/failed |
 | PATCH  | `/listings/:id`                 | supplier (owner) | |
 | GET    | `/demands`                       | any               | `?commodity=&status=` (default `status=open`) |
 | GET    | `/demands/mine`                  | buyer             | |
@@ -105,6 +111,39 @@ All routes are under `/api`.
 | GET    | `/disputes`                            | any                  | Admin sees all; buyer/supplier see disputes on transactions they're a party to |
 | POST   | `/disputes/:id/resolve`                | admin                | `{ "decision": "...", "outcome": "completed" \| "cancelled" }`. Atomically transitions the transaction to `COMPLETED` or `CANCELLED` |
 
+Every listing response includes `media: [...]` (processing/ready items,
+cover first, then `sortOrder`), in the shape of the frontend's
+`ListingMedia`: `url` (the `large` WebP for photos once ready, else the
+original), `thumbnailUrl` (`small` WebP / video first frame), `variants`,
+`status`, `caption`, `isCover`.
+
+### Listing media (issue #32)
+
+Files never pass through the API on the way in: the browser `PUT`s straight
+to the bucket with the presigned URL, then calls `/complete`. Processing
+(`src/media.rs`) runs each upload through **ffmpeg**, which generates the
+derivatives -- `small` (480px) and `large` (1280px) WebP renditions for
+photos, a 960px WebP first-frame thumbnail for videos -- and proves the
+file is really an image/video: anything ffmpeg can't decode (e.g. HTML
+renamed `.png`) is deleted and marked `failed`. At most two jobs run at
+once; jobs interrupted by a restart resume at boot, and uploads never
+attached to a listing are deleted after 24 hours.
+
+Keys follow `listings/{listingId}/images|videos/{id}.{ext}`; uploads made
+before the listing exists live under `listings/pending/{supplierId}/...`
+and keep that key once attached. Renditions sit next to the original as
+`{id}-small.webp` etc.
+
+Local setup: any S3-compatible server works, e.g.
+
+```bash
+docker run -d -p 8333:8333 chrislusf/seaweedfs server -s3 -dir=/data \
+  -master.volumeSizeLimitMB=64 -volume.max=50   # then create a bucket
+```
+
+with `S3_ENDPOINT=http://127.0.0.1:8333`, `S3_PATH_STYLE=true`, and
+`ffmpeg` installed. `e2e/listing-media.spec.ts` covers the browser flow.
+
 A `logistics_jobs` row is auto-created (idempotently) the moment a
 transaction's payment is confirmed (`mock_confirm_payment` /
 `transactions.logistics_job_id`), mirroring
@@ -121,8 +160,7 @@ payment is confirmed" behavior -- there's no manual "create job" endpoint.
 - **Real on-chain escrow** — payments today are a mock escrow flow
   (buyer-triggered settlement, see the payment endpoints above), not a
   real payment provider or on-chain contract.
-- **Cloud storage for listing media, commodity inspection metadata** —
-  tracked as issues #32 and #34.
+- **Commodity inspection metadata** — tracked as issue #34.
 - **Matching engine** — the weighted scoring algorithm from
   `matchingService.ts` hasn't been ported.
 
@@ -144,6 +182,10 @@ See `.env.example`. `JWT_SECRET` must be changed before any real deployment
 | `BACHS_SECRET_KEY` | no | [Bachs.io](https://docs.bachs.io) API key. `sk_sandbox_...` uses `sandbox-api.bachs.io`, anything else `api.bachs.io`. Unset → the checkout-session endpoint returns `503` |
 | `BACHS_WEBHOOK_SECRET` | no | Signing secret of the Bachs webhook endpoint (developer portal → Webhooks), which should point at `<API origin>/api/webhooks/bachs` and subscribe to `collection.succeeded` and `collection.failed`. Unset → every delivery is rejected |
 | `FRONTEND_BASE_URL` | no | Public origin of the React app, e.g. `https://agri-flowmvp.vercel.app`. Checkout redirects are restricted to it and default to its `/app/transactions/:id` pages. Bachs rejects `localhost` redirect URLs |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | no | S3-compatible bucket for listing media. All four or none; none → the `/media` endpoints return `503`. On Railway, reference the bucket service's `ENDPOINT`, `BUCKET`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY` |
+| `S3_REGION` | no (`auto`) | Region to sign for. `auto` suits Railway Buckets and R2; AWS needs the real region |
+| `S3_PATH_STYLE` | no (`false`) | `true` for path-style URLs (MinIO/SeaweedFS, older Railway Buckets) |
+| `S3_CORS_ORIGINS` | no | Extra comma-separated origins (e.g. `http://localhost:5173`) allowed to upload from a browser. At boot the API sets the bucket's CORS rules to these plus `FRONTEND_BASE_URL`; without them browsers can't `PUT` to the bucket |
 
 Welcome emails are sent in the background after the account is created, so
 an email failure never fails a registration — check the logs for

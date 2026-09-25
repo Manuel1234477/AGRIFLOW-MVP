@@ -5,6 +5,7 @@ pub mod disputes;
 pub mod health;
 pub mod listings;
 pub mod logistics;
+pub mod media;
 pub mod transactions;
 pub mod webhooks;
 
@@ -26,6 +27,10 @@ pub fn build(state: AppState) -> Router {
         .route("/listings", get(listings::list_active).post(listings::create))
         .route("/listings/mine", get(listings::mine))
         .route("/listings/{id}", get(listings::get_one).patch(listings::update))
+        .route("/media/presigned-url", post(media::presigned_url))
+        .route("/media/{id}", get(media::get_one).patch(media::update).delete(media::delete))
+        .route("/media/{id}/complete", post(media::complete))
+        .route("/media/{id}/content", get(media::content))
         .route("/demands", get(demands::list_open).post(demands::create))
         .route("/demands/mine", get(demands::mine))
         .route("/demands/{id}", get(demands::get_one))

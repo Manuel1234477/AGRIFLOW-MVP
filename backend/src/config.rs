@@ -1,5 +1,7 @@
 use std::net::SocketAddr;
 
+use crate::storage::StorageConfig;
+
 #[derive(Clone)]
 pub struct Config {
     pub database_url: String,
@@ -23,6 +25,13 @@ pub struct Config {
     /// (no trailing slash). Bachs checkout redirects are only allowed back to
     /// this origin, and it builds the default success/cancel URLs.
     pub frontend_base_url: Option<String>,
+    /// S3-compatible bucket for listing media. `None` (no `S3_*` vars set) →
+    /// the media endpoints return 503.
+    pub storage: Option<StorageConfig>,
+    /// Origins allowed to upload to the bucket from a browser:
+    /// `FRONTEND_BASE_URL` plus any in `S3_CORS_ORIGINS` (comma-separated,
+    /// e.g. `http://localhost:5173`). Applied to the bucket at boot.
+    pub storage_cors_origins: Vec<String>,
 }
 
 impl Config {
@@ -56,6 +65,35 @@ impl Config {
         let frontend_base_url =
             non_empty("FRONTEND_BASE_URL").map(|v| v.trim().trim_end_matches('/').to_string());
 
+        // All-or-nothing, so a half-configured bucket fails at boot instead
+        // of on the first upload.
+        let s3_vars = ["S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"];
+        let storage = match s3_vars.map(non_empty) {
+            [Some(endpoint), Some(bucket), Some(access_key_id), Some(secret_access_key)] => Some(StorageConfig {
+                endpoint,
+                bucket,
+                // Railway Buckets and R2 accept "auto"; AWS needs the real region.
+                region: non_empty("S3_REGION").unwrap_or_else(|| "auto".into()),
+                access_key_id,
+                secret_access_key,
+                path_style: non_empty("S3_PATH_STYLE").is_some_and(|v| v == "true" || v == "1"),
+            }),
+            [None, None, None, None] => None,
+            _ => anyhow::bail!("set all of {} or none of them", s3_vars.join(", ")),
+        };
+
+        let storage_cors_origins: Vec<String> = frontend_base_url
+            .iter()
+            .cloned()
+            .chain(
+                non_empty("S3_CORS_ORIGINS")
+                    .unwrap_or_default()
+                    .split(',')
+                    .map(|o| o.trim().trim_end_matches('/').to_string())
+                    .filter(|o| !o.is_empty()),
+            )
+            .collect();
+
         Ok(Self {
             database_url,
             jwt_secret,
@@ -67,6 +105,8 @@ impl Config {
             bachs_secret_key,
             bachs_webhook_secret,
             frontend_base_url,
+            storage,
+            storage_cors_origins,
         })
     }
 }

@@ -47,6 +47,19 @@ pub struct CreateListingRequest {
     pub location: String,
     pub availability_date: DateTime<Utc>,
     pub description: Option<String>,
+    /// Uploads made before the listing existed (`POST /media/presigned-url`
+    /// without `listingId`), attached in this order.
+    #[serde(default)]
+    pub media_ids: Vec<String>,
+}
+
+/// A listing plus its photos/videos, as every listing endpoint returns it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListingWithMedia {
+    #[serde(flatten)]
+    pub listing: SupplyListing,
+    pub media: Vec<crate::models::media::MediaView>,
 }
 
 #[derive(Debug, Deserialize)]

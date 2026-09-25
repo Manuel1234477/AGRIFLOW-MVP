@@ -69,28 +69,29 @@ export function TransactionDetailPage() {
         const l = await supplyService.fetchById(t.listingId);
         setListing(l);
       }
-      let p = paymentService.getForTransaction(t.id);
+      let p = await paymentService.fetchForTransaction(t.id);
+      if (!p) {
+        p = paymentService.getForTransaction(t.id);
+      }
       const j = logisticsService.getForTransaction(t.id);
 
       if (searchParams.get('payment') === 'success' && session) {
-        if (!p) {
-          p = await paymentService.initiate({
-            transactionId: t.id,
-            payerId: session.userId,
-            payerName: session.name,
-            amount: t.totalAmount,
-            currency: t.currency || 'NGN',
-          });
-        }
         if (p && p.status !== 'CONFIRMED') {
-          await paymentService.confirm(p.id, session.userId, session.name);
-          toast('success', 'Bachs.io Payment Confirmed! Funds are locked in escrow.');
-          const updated = await transactionService.fetchById(id);
-          if (updated) {
-            t = updated;
-            p = paymentService.getForTransaction(t.id);
+          toast('info', 'Verifying payment status with Bachs.io...');
+          const settled = await paymentService.pollUntilSettled(t.id, { intervalMs: 1500, timeoutMs: 25000 });
+          if (settled?.status === 'CONFIRMED') {
+            toast('success', 'Bachs.io Payment Confirmed! Funds are locked in escrow.');
+            p = settled;
+            const updated = await transactionService.fetchById(id);
+            if (updated) t = updated;
+            refreshNotifications();
+          } else if (settled?.status === 'FAILED') {
+            toast('error', settled.failureReason || 'Payment failed.');
+            p = settled;
+          } else {
+            toast('info', 'Still awaiting Bachs webhook confirmation -- check back shortly.');
+            p = settled || p;
           }
-          refreshNotifications();
         }
       }
 

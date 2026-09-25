@@ -19,7 +19,9 @@ RUN touch src/main.rs src/bin/migrate.rs && cargo build --release
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+# ffmpeg: listing media processing (WebP renditions, video thumbnails, and
+# rejecting uploads that aren't really images/videos) -- see src/media.rs.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates ffmpeg && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/agriflow-api /usr/local/bin/agriflow-api
 

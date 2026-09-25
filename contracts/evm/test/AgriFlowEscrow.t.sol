@@ -46,6 +46,55 @@ contract AgriFlowEscrowTest is Test {
         usdc.approve(address(escrow), type(uint256).max);
     }
 
+    // --- Constructor & Admin Tests ---
+
+    function test_Constructor_ZeroAddressReverts() public {
+        vm.expectRevert(abi.encodeWithSignature("OwnableInvalidOwner(address)", address(0)));
+        new AgriFlowEscrow(address(0), relayer, address(gasMaster));
+
+        vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.ZeroAddress.selector));
+        new AgriFlowEscrow(treasury, address(0), address(gasMaster));
+
+        vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.ZeroAddress.selector));
+        new AgriFlowEscrow(treasury, relayer, address(0));
+    }
+
+    function test_SetRelayer_SuccessAndReverts() public {
+        address newRelayer = makeAddr("newRelayer");
+
+        vm.prank(treasury);
+        escrow.setRelayer(newRelayer);
+        assertEq(escrow.relayer(), newRelayer);
+
+        vm.prank(treasury);
+        vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.ZeroAddress.selector));
+        escrow.setRelayer(address(0));
+
+        // Non-owner revert
+        vm.prank(buyer);
+        vm.expectRevert();
+        escrow.setRelayer(newRelayer);
+    }
+
+    function test_SetTreasury_SuccessAndReverts() public {
+        address newTreasury = makeAddr("newTreasury");
+
+        vm.prank(treasury);
+        escrow.setTreasury(newTreasury);
+        assertEq(escrow.treasury(), newTreasury);
+
+        vm.prank(treasury);
+        vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.ZeroAddress.selector));
+        escrow.setTreasury(address(0));
+
+        // Non-owner revert
+        vm.prank(buyer);
+        vm.expectRevert();
+        escrow.setTreasury(newTreasury);
+    }
+
+    // --- Happy Path Tests ---
+
     function test_HappyPath_ERC20() public {
         // 1. Relayer funds trade
         vm.prank(relayer);
@@ -154,6 +203,113 @@ contract AgriFlowEscrowTest is Test {
         assertEq(address(escrow).balance, 0);
     }
 
+    function test_ConfirmDelivery_WithNoLogisticsAddress_CreditsTreasury() public {
+        bytes32 noLogTradeId = keccak256("NO-LOG-TRADE");
+        vm.prank(relayer);
+        escrow.fundTradeFromIntent(
+            noLogTradeId,
+            buyer,
+            supplier,
+            address(0), // No logistics provider
+            address(usdc),
+            depositAddress,
+            intentTxHash,
+            goodsAmount,
+            logisticsAmount,
+            platformFee
+        );
+
+        // Owner can confirm delivery as well
+        vm.prank(treasury);
+        escrow.confirmDelivery(noLogTradeId);
+
+        // Logistics amount should be credited to treasury
+        assertEq(escrow.getWithdrawableBalance(treasury, address(usdc)), logisticsAmount + platformFee);
+    }
+
+    // --- Fund Trade Validation Tests ---
+
+    function test_RevertIf_ZeroAddressParticipants() public {
+        vm.prank(relayer);
+        vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.ZeroAddress.selector));
+        escrow.fundTradeFromIntent(
+            tradeId,
+            address(0),
+            supplier,
+            logistics,
+            address(usdc),
+            depositAddress,
+            intentTxHash,
+            goodsAmount,
+            logisticsAmount,
+            platformFee
+        );
+
+        vm.prank(relayer);
+        vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.ZeroAddress.selector));
+        escrow.fundTradeFromIntent(
+            tradeId,
+            buyer,
+            address(0),
+            logistics,
+            address(usdc),
+            depositAddress,
+            intentTxHash,
+            goodsAmount,
+            logisticsAmount,
+            platformFee
+        );
+
+        vm.prank(relayer);
+        vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.ZeroAddress.selector));
+        escrow.fundTradeFromIntent(
+            tradeId,
+            buyer,
+            supplier,
+            logistics,
+            address(usdc),
+            address(0),
+            intentTxHash,
+            goodsAmount,
+            logisticsAmount,
+            platformFee
+        );
+    }
+
+    function test_RevertIf_ZeroTotalRequired() public {
+        vm.prank(relayer);
+        vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.InvalidAmount.selector));
+        escrow.fundTradeFromIntent(
+            tradeId,
+            buyer,
+            supplier,
+            logistics,
+            address(usdc),
+            depositAddress,
+            intentTxHash,
+            0,
+            0,
+            0
+        );
+    }
+
+    function test_RevertIf_InsufficientETHPayment() public {
+        vm.prank(relayer);
+        vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.InsufficientPayment.selector, 1 ether, 2.22 ether));
+        escrow.fundTradeFromIntent{value: 1 ether}(
+            tradeId,
+            buyer,
+            supplier,
+            logistics,
+            address(0),
+            depositAddress,
+            intentTxHash,
+            2 ether,
+            0.2 ether,
+            0.02 ether
+        );
+    }
+
     function test_RevertIf_UnauthorizedFundCaller() public {
         address unauthorized = makeAddr("unauthorized");
         vm.prank(unauthorized);
@@ -203,6 +359,39 @@ contract AgriFlowEscrowTest is Test {
         );
     }
 
+    // --- Confirm Delivery Tests ---
+
+    function test_RevertIf_TradeNotFound_ConfirmDelivery() public {
+        bytes32 ghostTrade = keccak256("GHOST");
+        vm.prank(buyer);
+        vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.TradeNotFound.selector, ghostTrade));
+        escrow.confirmDelivery(ghostTrade);
+    }
+
+    function test_RevertIf_InvalidTradeStatus_ConfirmDelivery() public {
+        vm.prank(relayer);
+        escrow.fundTradeFromIntent(
+            tradeId,
+            buyer,
+            supplier,
+            logistics,
+            address(usdc),
+            depositAddress,
+            intentTxHash,
+            goodsAmount,
+            logisticsAmount,
+            platformFee
+        );
+
+        vm.prank(buyer);
+        escrow.confirmDelivery(tradeId);
+
+        // Confirming again when COMPLETED
+        vm.prank(buyer);
+        vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.InvalidTradeStatus.selector, tradeId, IAgriFlowEscrow.TradeStatus.COMPLETED, IAgriFlowEscrow.TradeStatus.FUNDED));
+        escrow.confirmDelivery(tradeId);
+    }
+
     function test_RevertIf_NonBuyerConfirmsDelivery() public {
         vm.prank(relayer);
         escrow.fundTradeFromIntent(
@@ -223,6 +412,8 @@ contract AgriFlowEscrowTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.UnauthorizedCaller.selector, stranger));
         escrow.confirmDelivery(tradeId);
     }
+
+    // --- Dispute and Refund Tests ---
 
     function test_DisputeAndRefund() public {
         vm.prank(relayer);
@@ -260,6 +451,90 @@ contract AgriFlowEscrowTest is Test {
 
         assertEq(usdc.balanceOf(buyer), totalAmount);
         assertEq(escrow.getWithdrawableBalance(supplier, address(usdc)), 0);
+    }
+
+    function test_RefundDirectlyFromFundedStatus() public {
+        vm.prank(relayer);
+        escrow.fundTradeFromIntent(
+            tradeId,
+            buyer,
+            supplier,
+            logistics,
+            address(usdc),
+            depositAddress,
+            intentTxHash,
+            goodsAmount,
+            logisticsAmount,
+            platformFee
+        );
+
+        // Owner refunds directly without dispute
+        vm.prank(treasury);
+        escrow.refundBuyer(tradeId);
+
+        assertEq(escrow.getWithdrawableBalance(buyer, address(usdc)), totalAmount);
+    }
+
+    function test_RevertIf_RaiseDispute_NonBuyer() public {
+        vm.prank(relayer);
+        escrow.fundTradeFromIntent(
+            tradeId,
+            buyer,
+            supplier,
+            logistics,
+            address(usdc),
+            depositAddress,
+            intentTxHash,
+            goodsAmount,
+            logisticsAmount,
+            platformFee
+        );
+
+        address stranger = makeAddr("stranger");
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.UnauthorizedCaller.selector, stranger));
+        escrow.raiseDispute(tradeId);
+
+        // Trade not found
+        bytes32 ghost = keccak256("GHOST");
+        vm.prank(buyer);
+        vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.TradeNotFound.selector, ghost));
+        escrow.raiseDispute(ghost);
+    }
+
+    function test_RevertIf_RefundBuyer_InvalidStatusOrNonOwner() public {
+        vm.prank(relayer);
+        escrow.fundTradeFromIntent(
+            tradeId,
+            buyer,
+            supplier,
+            logistics,
+            address(usdc),
+            depositAddress,
+            intentTxHash,
+            goodsAmount,
+            logisticsAmount,
+            platformFee
+        );
+
+        vm.prank(buyer);
+        escrow.confirmDelivery(tradeId);
+
+        // Cannot refund a COMPLETED trade
+        vm.prank(treasury);
+        vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.InvalidTradeStatus.selector, tradeId, IAgriFlowEscrow.TradeStatus.COMPLETED, IAgriFlowEscrow.TradeStatus.DISPUTED));
+        escrow.refundBuyer(tradeId);
+
+        // Non-owner revert
+        vm.prank(buyer);
+        vm.expectRevert();
+        escrow.refundBuyer(tradeId);
+
+        // Trade not found
+        bytes32 ghost = keccak256("GHOST");
+        vm.prank(treasury);
+        vm.expectRevert(abi.encodeWithSelector(IAgriFlowEscrow.TradeNotFound.selector, ghost));
+        escrow.refundBuyer(ghost);
     }
 
     function test_RevertIf_WithdrawWithZeroBalance() public {

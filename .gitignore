@@ -32,3 +32,4 @@ broadcast/
 *.njsproj
 *.sln
 *.sw?
+test-results/

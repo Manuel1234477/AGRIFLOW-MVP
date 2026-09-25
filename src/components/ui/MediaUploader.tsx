@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Image as ImageIcon,
   Film,
@@ -6,14 +6,20 @@ import {
   Play,
   AlertCircle,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
 import type { ListingMedia, CommodityType } from '../../types';
+import { mediaService } from '../../services/mediaService';
 
 interface MediaUploaderProps {
   media: ListingMedia[];
   onChange: (media: ListingMedia[]) => void;
   commodity?: CommodityType;
   maxFiles?: number;
+  // Attach uploads straight to an existing listing (edit flows). Without
+  // it, uploads wait to be attached via `mediaIds` when the listing is
+  // created.
+  listingId?: string;
 }
 
 // Curated high quality authentic agricultural demo media
@@ -102,17 +108,70 @@ export function MediaUploader({
   onChange,
   commodity = 'maize',
   maxFiles = 8,
+  listingId,
 }: MediaUploaderProps) {
   const [dragActive, setDragActive] = useState(false);
   const [selectedPreview, setSelectedPreview] = useState<ListingMedia | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Uploads finish asynchronously, after the `media` prop captured by the
+  // closure that started them is stale -- always patch the latest list.
+  const mediaRef = useRef(media);
+  mediaRef.current = media;
+  const patchItem = (id: string, patch: Partial<ListingMedia>) => {
+    onChange(mediaRef.current.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  };
+
+  // Poll items the server is still processing until they're ready/failed,
+  // so a rejected file is flagged before the listing is published.
+  useEffect(() => {
+    const processing = media.filter((m) => m.status === 'processing');
+    if (processing.length === 0) return;
+    const timer = setTimeout(async () => {
+      for (const item of processing) {
+        try {
+          const fresh = await mediaService.get(item.id);
+          if (fresh.status !== 'processing') {
+            // Keep the local preview; the server URL may not be cached yet.
+            patchItem(item.id, { status: fresh.status, processingError: fresh.processingError });
+          }
+        } catch {
+          // Transient -- try again on the next tick.
+        }
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [media]);
+
+  const startUpload = async (localId: string, file: File) => {
+    try {
+      const saved = await mediaService.upload(file, {
+        listingId,
+        onProgress: (progress) => patchItem(localId, { progress }),
+      });
+      // Swap the local placeholder id for the server's, keeping the blob
+      // preview so the thumbnail doesn't flicker.
+      patchItem(localId, {
+        id: saved.id,
+        status: saved.status,
+        progress: 1,
+        processingError: saved.processingError,
+      });
+    } catch (e) {
+      patchItem(localId, {
+        status: 'failed',
+        processingError: e instanceof Error ? e.message : 'Upload failed.',
+      });
+    }
+  };
+
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setError(null);
 
     const newItems: ListingMedia[] = [];
+    const queued: [string, File][] = [];
 
     Array.from(files).forEach((file) => {
       if (media.length + newItems.length >= maxFiles) {
@@ -136,28 +195,41 @@ export function MediaUploader({
       }
 
       const objectUrl = URL.createObjectURL(file);
+      const localId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       newItems.push({
-        id: `media_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        id: localId,
         type: isVideo ? 'video' : 'image',
         url: objectUrl,
         name: file.name,
         size: file.size,
         uploadedAt: new Date().toISOString(),
         caption: isVideo ? 'Uploaded inspection video' : 'Uploaded batch photo',
+        status: 'uploading',
+        progress: 0,
       });
+      queued.push([localId, file]);
     });
 
     if (newItems.length > 0) {
       onChange([...media, ...newItems]);
+      mediaRef.current = [...media, ...newItems];
+      queued.forEach(([localId, file]) => startUpload(localId, file));
     }
   };
 
   const handleRemove = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const updated = media.filter((m) => m.id !== id);
-    onChange(updated);
+    const item = media.find((m) => m.id === id);
+    onChange(media.filter((m) => m.id !== id));
     if (selectedPreview?.id === id) {
       setSelectedPreview(null);
+    }
+    // Already on the server: delete it there too, so it isn't left in the
+    // bucket. (An upload still in flight is cleaned up server-side later.)
+    if (item && !item.isSample && item.status !== 'uploading' && !id.startsWith('local_')) {
+      mediaService.remove(id).catch(() => {
+        // Unattached uploads are purged server-side after 24h anyway.
+      });
     }
   };
 
@@ -170,6 +242,7 @@ export function MediaUploader({
       name: s.name,
       caption: s.caption,
       uploadedAt: new Date().toISOString(),
+      isSample: true,
     }));
 
     // Avoid duplicates
@@ -180,6 +253,8 @@ export function MediaUploader({
       onChange([...media, ...filtered]);
     }
   };
+
+  const coverIndex = media.findIndex((m) => m.type === 'image' && !m.isSample && m.status !== 'failed');
 
   return (
     <div className="space-y-4">
@@ -296,8 +371,40 @@ export function MediaUploader({
                     />
                   )}
 
-                  {/* Primary Badge */}
-                  {index === 0 && (
+                  {/* Upload / processing status */}
+                  {item.status === 'uploading' && (
+                    <div className="absolute inset-x-0 bottom-0 h-1.5 bg-black/40">
+                      <div
+                        className="h-full bg-emerald-500 transition-all"
+                        style={{ width: `${Math.round((item.progress ?? 0) * 100)}%` }}
+                      />
+                    </div>
+                  )}
+                  {(item.status === 'uploading' || item.status === 'processing') && (
+                    <span className="absolute top-2 left-2 mt-6 px-1.5 py-0.5 rounded bg-black/70 text-white text-[10px] font-semibold flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      {item.status === 'uploading'
+                        ? `Uploading ${Math.round((item.progress ?? 0) * 100)}%`
+                        : 'Processing'}
+                    </span>
+                  )}
+                  {item.status === 'failed' && (
+                    <div className="absolute inset-0 bg-red-900/75 flex flex-col items-center justify-center p-2 text-center">
+                      <AlertCircle className="w-5 h-5 text-white mb-1" />
+                      <span className="text-[10px] font-semibold text-white leading-tight">
+                        {item.processingError || 'Upload failed.'}
+                      </span>
+                      <span className="text-[9px] text-red-100 mt-1">Remove and try again</span>
+                    </div>
+                  )}
+                  {item.isSample && (
+                    <span className="absolute top-2 left-2 mt-6 px-1.5 py-0.5 rounded bg-amber-500/90 text-white text-[9px] font-bold uppercase tracking-wider">
+                      Sample · not published
+                    </span>
+                  )}
+
+                  {/* Primary Badge: the server makes the first uploaded photo the cover */}
+                  {index === coverIndex && (
                     <span className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-emerald-600/90 text-white text-[9px] font-bold uppercase tracking-wider">
                       Primary Cover
                     </span>

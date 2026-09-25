@@ -4,10 +4,12 @@ mod config;
 mod email;
 mod error;
 mod ids;
+mod media;
 mod models;
 mod routes;
 mod state;
 mod state_machine;
+mod storage;
 mod validation;
 
 use sqlx::postgres::PgPoolOptions;
@@ -38,7 +40,37 @@ async fn main() -> anyhow::Result<()> {
     if config.bachs_webhook_secret.is_none() {
         tracing::warn!("BACHS_WEBHOOK_SECRET is not set — Bachs webhooks will be rejected");
     }
-    let state = AppState { db, config, mailer, http: reqwest::Client::new() };
+    let http = reqwest::Client::new();
+    let storage = match &config.storage {
+        Some(cfg) => Some(storage::Storage::new(cfg, http.clone())?),
+        None => {
+            tracing::warn!("S3_* is not set — listing media uploads are disabled");
+            None
+        }
+    };
+    let state = AppState {
+        db,
+        config,
+        mailer,
+        http,
+        storage,
+        // ffmpeg is CPU- and memory-heavy; two at a time keeps a small
+        // instance responsive.
+        media_jobs: std::sync::Arc::new(tokio::sync::Semaphore::new(2)),
+    };
+    if let Some(storage) = &state.storage {
+        if state.config.storage_cors_origins.is_empty() {
+            tracing::warn!("no FRONTEND_BASE_URL / S3_CORS_ORIGINS — browsers can't upload to the media bucket");
+        } else if let Err(e) = storage.put_cors(&state.config.storage_cors_origins).await {
+            // Not fatal: uploads from the browser fail until it's fixed,
+            // everything else keeps working.
+            tracing::error!(error = %format!("{e:#}"), "could not set media bucket CORS");
+        } else {
+            tracing::info!(origins = ?state.config.storage_cors_origins, "media bucket CORS set");
+        }
+        media::resume_processing(&state).await;
+        media::spawn_cleanup(state.clone());
+    }
     let app = routes::build(state);
 
     tracing::info!("agriflow-api listening on {addr}");

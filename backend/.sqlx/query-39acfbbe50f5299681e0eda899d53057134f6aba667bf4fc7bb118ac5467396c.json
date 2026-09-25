@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE listing_media SET status = 'failed', processing_error = 'Uploaded size did not match.', updated_at = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "39acfbbe50f5299681e0eda899d53057134f6aba667bf4fc7bb118ac5467396c"
+}

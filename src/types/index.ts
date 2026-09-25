@@ -49,6 +49,18 @@ export interface ListingMedia {
   thumbnailUrl?: string;
   caption?: string;
   uploadedAt?: string;
+  // Server-side lifecycle (see backend listing_media): `processing` while
+  // WebP renditions / thumbnails are generated, `failed` if the file wasn't
+  // a readable image/video. `uploading` is client-only, before the server
+  // has the file.
+  status?: 'uploading' | 'pending' | 'processing' | 'ready' | 'failed';
+  isCover?: boolean;
+  sortOrder?: number;
+  processingError?: string;
+  // Client-only: upload progress 0..1, and whether this is a local demo
+  // sample (never uploaded, so never published).
+  progress?: number;
+  isSample?: boolean;
 }
 
 export interface InspectionDetails {

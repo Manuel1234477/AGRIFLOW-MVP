@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO listing_media\n             (id, listing_id, uploader_id, kind, content_type, size_bytes, original_name, storage_key, sort_order)\n           VALUES ($1, $2, $3, $4, $5, $6, $7, $8,\n                   COALESCE((SELECT max(sort_order) + 1 FROM listing_media WHERE listing_id = $2), 0))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2a84a45d9ccf78b087bd805f75bbffaeed374c8b58c9360cf6e0b7877275ae3c"
+}

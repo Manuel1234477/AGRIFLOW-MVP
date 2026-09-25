@@ -2,6 +2,7 @@ import type { SupplyListing, ListingStatus, CommodityType, QualityGrade, Listing
 import { apiFetch } from '../lib/api';
 import { storageService, STORE_KEYS } from './storageService';
 import { auditService } from './auditService';
+import { normalizeMedia } from './mediaService';
 
 function normalizeListing(raw: any): SupplyListing {
   return {
@@ -20,7 +21,7 @@ function normalizeListing(raw: any): SupplyListing {
     description: raw.description || '',
     photos: raw.photos || undefined,
     videos: raw.videos || undefined,
-    media: raw.media || undefined,
+    media: Array.isArray(raw.media) ? raw.media.map(normalizeMedia) : undefined,
     inspectionDetails: raw.inspectionDetails || undefined,
     status: (raw.status || 'active').toLowerCase() as ListingStatus,
     createdAt: raw.createdAt || raw.created_at || new Date().toISOString(),
@@ -78,6 +79,11 @@ export const supplyService = {
     media?: ListingMedia[];
     inspectionDetails?: InspectionDetails;
   }): Promise<SupplyListing> {
+    // Only files actually uploaded to the media bucket are published;
+    // local demo samples and failed uploads stay behind.
+    const mediaIds = (params.media ?? [])
+      .filter((m) => !m.isSample && (m.status === 'processing' || m.status === 'ready'))
+      .map((m) => m.id);
     try {
       const data = await apiFetch<any>('/api/listings', {
         method: 'POST',
@@ -91,14 +97,13 @@ export const supplyService = {
           location: params.location,
           availabilityDate: params.availabilityDate,
           description: params.description,
+          mediaIds,
         }),
       });
 
+      // `data.media` is the server's record of the attached uploads.
       const listing = normalizeListing({
         ...data,
-        photos: params.photos,
-        videos: params.videos,
-        media: params.media,
         inspectionDetails: params.inspectionDetails,
       });
       const all = storageService.get<SupplyListing[]>(STORE_KEYS.LISTINGS) ?? [];

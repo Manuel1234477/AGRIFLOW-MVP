@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { registerViaApi, loginViaUI, apiGet, uniqueSuffix, type TestUser } from './helpers';
+import { registerViaApi, loginViaUI, apiGet, uniqueSuffix, API_URL, type TestUser } from './helpers';
 
 // Issue #32 end to end: the supplier picks a photo and a video on the
 // create-listing form, the browser uploads them straight to the storage
@@ -64,4 +64,73 @@ test('supplier uploads photo + video and publishes them on a listing', async ({ 
   // A buyer-facing detail page renders the uploaded photo, not the stock image.
   await page.goto(`/app/supply/${created.id}`);
   await expect(page.locator(`img[src*="/api/media/${cover.id}/content"]`).first()).toBeVisible();
+});
+
+// Adding media to a listing that already exists, from My Supply: uploads
+// attach straight to the listing, the first photo becomes the cover, the
+// supplier can pick another cover, and removing the cover promotes the next.
+test('supplier adds, re-covers and removes media on an existing listing', async ({ page, request }) => {
+  const suffix = uniqueSuffix();
+  const supplier: TestUser = { name: `E2E Media Editor ${suffix}`, email: `media-editor-${suffix}@e2e.agriflow`, password: 'testpass123', role: 'supplier' };
+  const { token } = await registerViaApi(request, supplier);
+
+  const created = await request.post(`${API_URL}/listings`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: {
+      commodity: 'maize', quantity: 20, unit: 'tonnes', qualityGrade: 'A', pricePerUnit: 400000,
+      location: 'Kaduna', availabilityDate: '2026-11-01T00:00:00Z', description: `E2E edit media ${suffix}`,
+    },
+  });
+  expect(created.ok()).toBeTruthy();
+  const listing = await created.json();
+  expect(listing.media).toEqual([]);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agriflow-media-edit-e2e-'));
+  const first = path.join(dir, 'first.jpg');
+  const second = path.join(dir, 'second.png');
+  const video = path.join(dir, 'silo.webm');
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc=size=800x600', '-frames:v', '1', first]);
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'smptebars=size=800x600', '-frames:v', '1', second]);
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc=size=320x240:rate=25', '-t', '1', '-c:v', 'libvpx', video]);
+
+  await loginViaUI(page, supplier.email, supplier.password);
+  await page.goto('/app/supply/manage');
+  const card = page.locator('div.bg-white.rounded-xl', { hasText: listing.id });
+  await card.getByRole('button', { name: /Photos & videos \(0\)/ }).click();
+  // Demo samples are never uploaded, so they aren't offered on a live listing.
+  await expect(card.getByRole('button', { name: /Add Sample Produce Media/ })).toHaveCount(0);
+
+  await card.locator('input[type="file"]').setInputFiles([first, second, video]);
+  await expect(card.getByText('Uploaded Media (3/8)')).toBeVisible();
+  await expect(card.getByText(/^(Uploading \d+%|Processing)$/)).toHaveCount(0, { timeout: 60_000 });
+  await expect(card.getByRole('button', { name: /Photos & videos \(3\)/ })).toBeVisible();
+
+  const media = async () => (await apiGet(request, `/listings/${listing.id}`, token)).media;
+  await expect.poll(async () => (await media()).map((m: { status: string }) => m.status)).toEqual(['ready', 'ready', 'ready']);
+  let items = await media();
+  // Uploads run in parallel, so whichever photo finished first is the cover.
+  const photos = items.filter((m: { type: string }) => m.type === 'image');
+  const cover = photos.find((m: { isCover: boolean }) => m.isCover);
+  const other = photos.find((m: { isCover: boolean }) => !m.isCover);
+  expect(cover).toBeTruthy();
+  expect(other).toBeTruthy();
+  expect(items.find((m: { name: string }) => m.name === 'silo.webm').thumbnailUrl).toBeTruthy();
+
+  // Pick the other photo as cover.
+  const otherTile = card.locator('.group', { has: page.locator(`img[alt="${other.name}"]`) });
+  await otherTile.hover();
+  await otherTile.getByRole('button', { name: 'Set as cover' }).click();
+  await expect(otherTile.getByText('Primary Cover')).toBeVisible();
+  await expect.poll(async () => (await media()).find((m: { isCover: boolean }) => m.isCover)?.id).toBe(other.id);
+
+  // Remove the new cover: it's deleted server-side and the remaining photo takes over.
+  await otherTile.getByTitle('Remove item').click();
+  await expect(card.getByText('Uploaded Media (2/8)')).toBeVisible();
+  await expect.poll(async () => (await media()).length).toBe(2);
+  items = await media();
+  expect(items[0]).toMatchObject({ id: cover.id, isCover: true });
+  const coverTile = card.locator('.group', { has: page.locator(`img[alt="${cover.name}"]`) });
+  await expect(coverTile.getByText('Primary Cover')).toBeVisible();
+  const gone = await request.get(`${API_URL}/media/${other.id}/content`, { maxRedirects: 0 });
+  expect(gone.status()).toBe(404);
 });

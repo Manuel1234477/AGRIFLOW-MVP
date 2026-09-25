@@ -211,14 +211,7 @@ pub async fn create(
         )
         .execute(&state.db)
         .await?;
-        sqlx::query!(
-            r#"UPDATE listing_media SET is_cover = TRUE
-               WHERE id = (SELECT id FROM listing_media WHERE listing_id = $1 AND kind = 'image'
-                           ORDER BY sort_order LIMIT 1)"#,
-            listing.id,
-        )
-        .execute(&state.db)
-        .await?;
+        media::ensure_cover(&state.db, &listing.id).await?;
     }
 
     one_with_media(&state, listing).await

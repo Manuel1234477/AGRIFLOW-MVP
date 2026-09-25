@@ -164,13 +164,18 @@ pub async fn complete(
     )
     .fetch_optional(&state.db)
     .await?;
-    let row = match row {
-        Some(row) => {
-            media::spawn_processing(state.clone(), row.id.clone());
-            row
-        }
+    let Some(row) = row else {
         // A concurrent `complete` won the race; report its result.
-        None => load(&state, &id).await?,
+        return Ok(Json(media::view(&load(&state, &id).await?)));
+    };
+    media::spawn_processing(state.clone(), row.id.clone());
+    // Added to an existing listing without a cover: this photo may become it.
+    let row = match &row.listing_id {
+        Some(listing_id) => {
+            media::ensure_cover(&state.db, listing_id).await?;
+            load(&state, &id).await?
+        }
+        None => row,
     };
     Ok(Json(media::view(&row)))
 }
@@ -295,5 +300,8 @@ pub async fn delete(
     sqlx::query!("DELETE FROM listing_media WHERE id = $1", row.id)
         .execute(&state.db)
         .await?;
+    if let (true, Some(listing_id)) = (row.is_cover, &row.listing_id) {
+        media::ensure_cover(&state.db, listing_id).await?;
+    }
     Ok(StatusCode::NO_CONTENT)
 }

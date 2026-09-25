@@ -16,15 +16,23 @@ export function LogisticsAssignmentPage() {
 
   useEffect(() => {
     if (!session) return;
-    const providerJobs = logisticsService.getForProvider(session.userId);
-    let current: LogisticsJob | null = null;
-    if (id) {
-      current = logisticsService.getById(id);
-    } else {
-      current = providerJobs.find((j) => j.status === 'ASSIGNED' || j.status === 'PENDING') || providerJobs[0] || logisticsService.getAll()[0] || null;
+    let isMounted = true;
+    async function load() {
+      const allJobs = await logisticsService.fetchAll();
+      if (!isMounted) return;
+      const providerJobs = allJobs.filter((j) => j.providerId === session?.userId);
+      let current: LogisticsJob | null = null;
+      if (id) {
+        current = allJobs.find((j) => j.id === id) || null;
+      } else {
+        current = providerJobs.find((j) => j.status === 'ASSIGNED' || j.status === 'PENDING') || providerJobs[0] || allJobs[0] || null;
+      }
+      setJob(current);
     }
-    setJob(current);
+    load();
+    return () => { isMounted = false; };
   }, [id, session]);
+
 
   const handleAccept = async () => {
     if (!session || !job) return;

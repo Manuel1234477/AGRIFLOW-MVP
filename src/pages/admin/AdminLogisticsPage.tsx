@@ -1,74 +1,106 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, User } from 'lucide-react';
+import { Truck, User as UserIcon, Loader2 } from 'lucide-react';
 import { logisticsService } from '../../services/logisticsService';
 import { transactionService } from '../../services/transactionService';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../components/ui/Toast';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Loader2 } from 'lucide-react';
 import { formatDate, formatCommodity } from '../../utils/format';
-import type { LogisticsJob, Transaction } from '../../types';
+import type { LogisticsJob, Transaction, User } from '../../types';
+
 
 export function AdminLogisticsPage() {
   const { session, refreshNotifications } = useApp();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [jobs, setJobs] = useState<LogisticsJob[]>([]);
+  const [providers, setProviders] = useState<Omit<User, 'passwordHash'>[]>([]);
   const [assigningJob, setAssigningJob] = useState<LogisticsJob | null>(null);
   const [selectedProvider, setSelectedProvider] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
   const [txnsById, setTxnsById] = useState<Record<string, Transaction>>({});
 
-  const allJobs = logisticsService.getAll();
-  const providers = logisticsService.getProviders();
+  const loadData = async () => {
+    try {
+      setFetching(true);
+      const [fetchedJobs, fetchedProviders] = await Promise.all([
+        logisticsService.fetchAll(),
+        logisticsService.fetchProviders(),
+      ]);
+      setJobs(fetchedJobs);
+      setProviders(fetchedProviders);
 
-  const loadTxns = (jobs: LogisticsJob[]) => {
-    Promise.all(jobs.map(async (j) => [j.transactionId, await transactionService.getById(j.transactionId)] as const))
-      .then((entries) => {
-        const map: Record<string, Transaction> = {};
-        for (const [txnId, t] of entries) if (t) map[txnId] = t;
-        setTxnsById(map);
-      });
+      const entries = await Promise.all(
+        fetchedJobs.map(async (j) => [j.transactionId, await transactionService.fetchById(j.transactionId)] as const)
+      );
+      const map: Record<string, Transaction> = {};
+      for (const [txnId, t] of entries) {
+        if (t) map[txnId] = t;
+      }
+      setTxnsById(map);
+    } catch (err: unknown) {
+      toast('error', err instanceof Error ? err.message : 'Failed to load logistics jobs.');
+    } finally {
+      setFetching(false);
+    }
   };
 
   useEffect(() => {
     if (!session) return;
-    loadTxns(allJobs);
-    // Fetch once on mount; handleAssign re-fetches explicitly after a change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadData();
   }, [session]);
 
   if (!session) return null;
 
-  const sorted = [...allJobs].sort((a, b) => {
+  const sorted = [...jobs].sort((a, b) => {
     const priority = ['PENDING', 'ASSIGNED', 'ACCEPTED', 'READY_FOR_PICKUP', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'];
     return priority.indexOf(a.status) - priority.indexOf(b.status);
   });
 
   const handleAssign = async () => {
-    if (!assigningJob || !selectedProvider) { toast('error', 'Select a provider.'); return; }
+    if (!assigningJob || !selectedProvider) {
+      toast('error', 'Select a provider.');
+      return;
+    }
     const provider = providers.find((p) => p.id === selectedProvider);
-    if (!provider) return;
+    if (!provider) {
+      toast('error', 'Selected provider not found.');
+      return;
+    }
     setLoading(true);
     try {
       await logisticsService.assignProvider(
-        assigningJob.id, provider.id, provider.organizationName ?? provider.name,
-        session.userId, session.name
+        assigningJob.id,
+        provider.id,
+        provider.organizationName ?? provider.name,
+        session.userId,
+        session.name
       );
       toast('success', `${provider.organizationName ?? provider.name} assigned to job ${assigningJob.id}.`);
       refreshNotifications();
-      loadTxns(logisticsService.getAll());
+      await loadData();
       setAssigningJob(null);
       setSelectedProvider('');
-    } catch (e: any) { toast('error', e.message); }
-    finally { setLoading(false); }
+    } catch (e: any) {
+      toast('error', e.message || 'Failed to assign provider.');
+    } finally {
+      setLoading(false);
+    }
   };
+
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Logistics Jobs</h1>
 
-      {sorted.length === 0 ? (
+      {fetching && jobs.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-gray-500 bg-white rounded-xl border border-gray-200">
+          <Loader2 className="w-8 h-8 animate-spin text-gray-400 mb-2" />
+          <p className="text-sm">Loading logistics jobs...</p>
+        </div>
+      ) : sorted.length === 0 ? (
         <EmptyState icon={<Truck className="w-7 h-7" />} title="No logistics jobs" description="Jobs are created automatically when payment is confirmed." />
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -121,9 +153,10 @@ export function AdminLogisticsPage() {
                             onClick={() => { setAssigningJob(j); setSelectedProvider(''); }}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs"
                           >
-                            <User className="w-3.5 h-3.5" />
+                            <UserIcon className="w-3.5 h-3.5" />
                             Assign Provider
                           </button>
+
                         )}
                         {j.status !== 'PENDING' && txn && (
                           <button onClick={() => navigate(`/app/transactions/${j.transactionId}`)} className="text-xs text-gray-500 hover:text-gray-800 font-medium">

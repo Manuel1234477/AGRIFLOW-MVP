@@ -122,3 +122,59 @@ export function mapTransaction(raw: ApiTransaction): Transaction {
     history: (raw.history ?? []).map(mapEvent),
   };
 }
+
+// ─── Logistics Job ───────────────────────────────────────────────────────────
+
+export interface ApiLogisticsJob {
+  id: string;
+  transactionId?: string;
+  transaction_id?: string;
+  providerId?: string | null;
+  provider_id?: string | null;
+  providerName?: string | null;
+  provider_name?: string | null;
+  commodity: import('../types').CommodityType;
+  quantity: string | number;
+  unit: string;
+  pickupLocation?: string;
+  pickup_location?: string;
+  deliveryLocation?: string;
+  delivery_location?: string;
+  pickupDate?: string;
+  pickup_date?: string;
+  expectedDeliveryDate?: string;
+  expected_delivery_date?: string;
+  logisticsCost?: string | number;
+  logistics_cost?: string | number;
+  currency: string;
+  status: import('../types').LogisticsStatus;
+  proofOfDelivery?: import('../types').ProofOfDelivery | null;
+  proof_of_delivery?: import('../types').ProofOfDelivery | null;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+}
+
+export function mapLogisticsJob(raw: any): import('../types').LogisticsJob {
+  return {
+    id: raw.id,
+    transactionId: raw.transactionId || raw.transaction_id,
+    providerId: raw.providerId || raw.provider_id || undefined,
+    providerName: raw.providerName || raw.provider_name || undefined,
+    commodity: raw.commodity,
+    quantity: num(raw.quantity),
+    unit: raw.unit || 'tonnes',
+    pickupLocation: raw.pickupLocation || raw.pickup_location || '',
+    deliveryLocation: raw.deliveryLocation || raw.delivery_location || '',
+    pickupDate: raw.pickupDate || raw.pickup_date || new Date().toISOString(),
+    expectedDeliveryDate: raw.expectedDeliveryDate || raw.expected_delivery_date || new Date().toISOString(),
+    logisticsCost: num(raw.logisticsCost ?? raw.logistics_cost ?? 0),
+    currency: raw.currency || 'NGN',
+    status: raw.status,
+    proofOfDelivery: raw.proofOfDelivery || raw.proof_of_delivery || undefined,
+    createdAt: raw.createdAt || raw.created_at || new Date().toISOString(),
+    updatedAt: raw.updatedAt || raw.updated_at || new Date().toISOString(),
+  };
+}
+

@@ -44,7 +44,7 @@ export function SupplierDashboard() {
   const activeListings = listings.filter((l) => l.status === 'active').length;
   const pending = allTxns.filter((t) => t.status === 'PENDING' || t.status === 'PENDING_SUPPLIER_ACCEPTANCE').length;
   const inFulfilment = allTxns.filter((t) =>
-    ['LOGISTICS_PENDING','LOGISTICS_ASSIGNED','LOGISTICS_ACCEPTED','READY_FOR_PICKUP','PICKED_UP','IN_TRANSIT'].includes(t.status)
+    ['PAYMENT_CONFIRMED','LOGISTICS_PENDING','LOGISTICS_ASSIGNED','LOGISTICS_ACCEPTED','READY_FOR_PICKUP','PICKED_UP','IN_TRANSIT','DELIVERED','BUYER_CONFIRMATION_PENDING'].includes(t.status)
   ).length;
   const completed = allTxns.filter((t) => t.status === 'COMPLETED').length;
 
@@ -92,6 +92,7 @@ export function SupplierDashboard() {
         userId={session.userId}
         userName={session.name}
         userRole="supplier"
+        transactions={allTxns}
         onUpdated={load}
       />
 

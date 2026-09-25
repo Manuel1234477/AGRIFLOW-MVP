@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Truck, MapPin, Search, Navigation } from 'lucide-react';
 import { logisticsService } from '../services/logisticsService';
@@ -6,6 +6,7 @@ import { transactionService } from '../services/transactionService';
 import { useApp } from '../context/AppContext';
 import { EmptyState } from '../components/ui/EmptyState';
 import { formatDate, formatCommodity } from '../utils/format';
+import type { LogisticsJob, Transaction } from '../types';
 
 type DeliverableFilter = 'all' | 'in_transit' | 'delivered' | 'completed' | 'pending';
 
@@ -29,21 +30,41 @@ export function ShipmentsPage() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<DeliverableFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [jobs, setJobs] = useState<LogisticsJob[]>([]);
+  const [txns, setTxns] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+    if (!session) return;
+    setLoading(true);
+    try {
+      const [liveTxns, liveJobs] = await Promise.all([
+        transactionService.fetchMine(),
+        logisticsService.fetchAll(),
+      ]);
+      setTxns(liveTxns);
+      setJobs(liveJobs);
+    } finally {
+      setLoading(false);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   if (!session) return null;
 
-  let deliverables = [];
+  let deliverables: LogisticsJob[] = [];
   if (session.role === 'logistics') {
-    deliverables = logisticsService.getForProvider(session.userId);
+    deliverables = jobs.filter((j) => j.providerId === session.userId);
+    if (deliverables.length === 0) {
+      deliverables = jobs;
+    }
   } else {
-    // Buyer or supplier — get jobs for their transactions or fallback to active transactions
-    const txns =
-      session.role === 'buyer'
-        ? transactionService.getForBuyer(session.userId)
-        : transactionService.getForSupplier(session.userId);
-
+    // Buyer or supplier — get jobs for their transactions or map active transactions
     deliverables = txns.map((t) => {
-      const job = logisticsService.getForTransaction(t.id);
+      const job = jobs.find((j) => j.transactionId === t.id || (t.logisticsJobId && j.id === t.logisticsJobId));
       if (job) return job;
       return {
         id: t.logisticsJobId || `DEL-${t.id}`,
@@ -151,13 +172,13 @@ export function ShipmentsPage() {
       {sorted.length === 0 ? (
         <EmptyState
           icon={<Truck className="w-7 h-7" />}
-          title="No deliverables found"
-          description="No shipments match the selected deliverable filter."
+          title={loading ? 'Loading deliverables…' : 'No deliverables found'}
+          description={loading ? 'Fetching active shipments from database…' : 'No shipments match the selected deliverable filter.'}
         />
       ) : (
         <div className="space-y-3">
           {sorted.map((j) => {
-            const txn = transactionService.getById(j.transactionId);
+            const txn = txns.find((t) => t.id === j.transactionId) || transactionService.getById(j.transactionId);
             return (
               <div
                 key={j.id}

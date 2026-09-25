@@ -67,6 +67,7 @@ export function LogisticsDashboard() {
         userId={session.userId}
         userName={session.name}
         userRole="logistics"
+        jobs={myJobs}
         onUpdated={() => setTick(t => t + 1)}
       />
 

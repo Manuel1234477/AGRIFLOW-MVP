@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, MapPin, Hand } from 'lucide-react';
+import { Truck, MapPin, Hand, Loader2 } from 'lucide-react';
 import { logisticsService } from '../services/logisticsService';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../components/ui/Toast';
 import { formatCurrency, formatDate, formatCommodity } from '../utils/format';
+import type { LogisticsJob } from '../types';
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'bg-amber-50 text-amber-800 border-amber-200',
@@ -23,13 +24,32 @@ export function LogisticsJobsPage() {
   const { session, refreshNotifications } = useApp();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [jobs, setJobs] = useState<LogisticsJob[]>([]);
   const [activeTab, setActiveTab] = useState<'assigned' | 'open'>('assigned');
   const [claiming, setClaiming] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadJobs = async () => {
+    try {
+      setLoading(true);
+      const res = await logisticsService.fetchAll();
+      setJobs(res);
+    } catch (err: unknown) {
+      toast('error', err instanceof Error ? err.message : 'Failed to fetch jobs.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!session) return;
+    loadJobs();
+  }, [session]);
 
   if (!session) return null;
 
-  const myJobs = logisticsService.getForProvider(session.userId);
-  const openJobs = logisticsService.getPending();
+  const myJobs = jobs.filter((j) => j.providerId === session.userId);
+  const openJobs = jobs.filter((j) => j.status === 'PENDING');
 
   const sortedMyJobs = [...myJobs].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   const priorityOrder = ['ASSIGNED', 'ACCEPTED', 'READY_FOR_PICKUP', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED', 'FAILED'];
@@ -42,6 +62,7 @@ export function LogisticsJobsPage() {
       await logisticsService.claimJob(jobId, session.userId, session.name);
       toast('success', `Job ${jobId} claimed! You are now the assigned logistics carrier.`);
       refreshNotifications();
+      await loadJobs();
       setActiveTab('assigned');
     } catch (err: unknown) {
       toast('error', err instanceof Error ? err.message : 'Failed to claim job.');
@@ -49,6 +70,7 @@ export function LogisticsJobsPage() {
       setClaiming(null);
     }
   };
+
 
   const currentList = activeTab === 'assigned' ? orderedMyJobs : openJobs;
 
@@ -90,12 +112,18 @@ export function LogisticsJobsPage() {
         </div>
       </div>
 
-      {currentList.length === 0 ? (
+      {loading && currentList.length === 0 ? (
+        <div className="py-16 text-center text-gray-500">
+          <Loader2 size={32} className="mx-auto text-gray-400 mb-3 animate-spin" />
+          <div className="text-sm font-semibold text-gray-700 mb-1">Loading logistics jobs...</div>
+        </div>
+      ) : currentList.length === 0 ? (
         <div className="py-16 text-center">
           <Truck size={32} className="mx-auto text-gray-300 mb-3" />
           <div className="text-sm font-semibold text-gray-700 mb-1">
             {activeTab === 'assigned' ? 'No jobs assigned yet' : 'No open jobs available'}
           </div>
+
           <p className="text-xs text-gray-400 max-w-xs mx-auto">
             {activeTab === 'assigned'
               ? 'Check the "Open Jobs" tab to claim a delivery, or wait for an assignment.'

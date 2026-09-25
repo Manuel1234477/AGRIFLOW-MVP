@@ -5,7 +5,6 @@ import {
   X,
   Play,
   AlertCircle,
-  Sparkles,
   Loader2,
 } from 'lucide-react';
 import type { ListingMedia, CommodityType } from '../../types';
@@ -22,91 +21,9 @@ interface MediaUploaderProps {
   listingId?: string;
 }
 
-// Curated high quality authentic agricultural demo media
-const SAMPLE_MEDIA_LIBRARY: Record<
-  string,
-  { type: 'image' | 'video'; url: string; name: string; caption: string }[]
-> = {
-  maize: [
-    {
-      type: 'image',
-      url: 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?auto=format&fit=crop&w=1200&q=80',
-      name: 'Dry_Yellow_Maize_Batch_A.jpg',
-      caption: 'Grade A Yellow Maize - Dried to 12.5% Moisture',
-    },
-    {
-      type: 'image',
-      url: 'https://images.unsplash.com/photo-1596797882870-8c33deeac224?auto=format&fit=crop&w=1200&q=80',
-      name: 'Clean_Grain_Inspection.jpg',
-      caption: 'Close-up grain purity inspection (99.2% clean grain)',
-    },
-    {
-      type: 'video',
-      url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-      name: 'Farm_Warehouse_Video_Proof.mp4',
-      caption: 'Warehouse inspection video recording & bagging verification',
-    },
-  ],
-  rice: [
-    {
-      type: 'image',
-      url: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=1200&q=80',
-      name: 'Milled_Parboiled_Rice.jpg',
-      caption: 'Standard Long Grain Parboiled Rice - 50kg Bags',
-    },
-    {
-      type: 'image',
-      url: 'https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?auto=format&fit=crop&w=1200&q=80',
-      name: 'Rice_Paddy_Harvest.jpg',
-      caption: 'Freshly harvested paddy before de-stoning and polishing',
-    },
-    {
-      type: 'video',
-      url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-      name: 'Milling_Line_Video.mp4',
-      caption: 'Automated de-stoning & bag sealing live video clip',
-    },
-  ],
-  soybean: [
-    {
-      type: 'image',
-      url: 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&w=1200&q=80',
-      name: 'Non_GMO_Soybeans.jpg',
-      caption: 'Clean non-GMO Soybeans ready for oil extraction / feed milling',
-    },
-    {
-      type: 'image',
-      url: 'https://images.unsplash.com/photo-1508615039623-a25605d2b022?auto=format&fit=crop&w=1200&q=80',
-      name: 'Soybean_Quality_Test.jpg',
-      caption: 'Batch laboratory moisture and protein certification',
-    },
-    {
-      type: 'video',
-      url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-      name: 'Soybean_Loading_Video.mp4',
-      caption: 'Palletized soybean loading inspection video',
-    },
-  ],
-  general: [
-    {
-      type: 'image',
-      url: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=1200&q=80',
-      name: 'Farm_Produce_Storage.jpg',
-      caption: 'A-Grade farm produce in ventilated dry storage',
-    },
-    {
-      type: 'video',
-      url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-      name: 'Produce_Inspection_Clip.mp4',
-      caption: 'Live batch quality & packaging inspection footage',
-    },
-  ],
-};
-
 export function MediaUploader({
   media = [],
   onChange,
-  commodity = 'maize',
   maxFiles = 8,
   listingId,
 }: MediaUploaderProps) {
@@ -117,22 +34,34 @@ export function MediaUploader({
 
   // Uploads finish asynchronously, after the `media` prop captured by the
   // closure that started them is stale -- always patch the latest list.
+  // Several patches can land before the parent re-renders (two uploads
+  // finishing, a poll result), so each one advances the ref itself;
+  // otherwise the later patch is built on the old list and drops the first.
   const mediaRef = useRef(media);
   mediaRef.current = media;
+  const commit = (next: ListingMedia[]) => {
+    mediaRef.current = next;
+    onChange(next);
+  };
   const patchItem = (id: string, patch: Partial<ListingMedia>) => {
-    onChange(mediaRef.current.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+    commit(mediaRef.current.map((m) => (m.id === id ? { ...m, ...patch } : m)));
   };
 
   // Poll items the server is still processing until they're ready/failed,
-  // so a rejected file is flagged before the listing is published.
+  // so a rejected file is flagged before the listing is published. A round
+  // where nothing finished leaves `media` unchanged, so `pollTick` is what
+  // schedules the next one -- without it polling stops after one check and
+  // a slow video stays "Processing" forever.
+  const [pollTick, setPollTick] = useState(0);
   useEffect(() => {
     const processing = media.filter((m) => m.status === 'processing');
     if (processing.length === 0) return;
+    let cancelled = false;
     const timer = setTimeout(async () => {
       for (const item of processing) {
         try {
           const fresh = await mediaService.get(item.id);
-          if (fresh.status !== 'processing') {
+          if (!cancelled && fresh.status !== 'processing') {
             // Keep the local preview; the server URL may not be cached yet.
             patchItem(item.id, { status: fresh.status, processingError: fresh.processingError });
           }
@@ -140,9 +69,13 @@ export function MediaUploader({
           // Transient -- try again on the next tick.
         }
       }
+      if (!cancelled) setPollTick((t) => t + 1);
     }, 2000);
-    return () => clearTimeout(timer);
-  }, [media]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [media, pollTick]);
 
   const startUpload = async (localId: string, file: File) => {
     try {
@@ -157,6 +90,7 @@ export function MediaUploader({
         status: saved.status,
         progress: 1,
         processingError: saved.processingError,
+        isCover: saved.isCover,
       });
     } catch (e) {
       patchItem(localId, {
@@ -211,71 +145,54 @@ export function MediaUploader({
     });
 
     if (newItems.length > 0) {
-      onChange([...media, ...newItems]);
-      mediaRef.current = [...media, ...newItems];
+      commit([...mediaRef.current, ...newItems]);
       queued.forEach(([localId, file]) => startUpload(localId, file));
     }
   };
 
   const handleRemove = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const item = media.find((m) => m.id === id);
-    onChange(media.filter((m) => m.id !== id));
+    const item = mediaRef.current.find((m) => m.id === id);
+    commit(mediaRef.current.filter((m) => m.id !== id));
     if (selectedPreview?.id === id) {
       setSelectedPreview(null);
     }
     // Already on the server: delete it there too, so it isn't left in the
     // bucket. (An upload still in flight is cleaned up server-side later.)
-    if (item && !item.isSample && item.status !== 'uploading' && !id.startsWith('local_')) {
+    if (item && item.status !== 'uploading' && !id.startsWith('local_')) {
       mediaService.remove(id).catch(() => {
         // Unattached uploads are purged server-side after 24h anyway.
       });
     }
   };
 
-  const handleAddSamplePreset = () => {
-    const samples = SAMPLE_MEDIA_LIBRARY[commodity] || SAMPLE_MEDIA_LIBRARY.general;
-    const itemsToAdd: ListingMedia[] = samples.map((s, idx) => ({
-      id: `sample_${commodity}_${Date.now()}_${idx}`,
-      type: s.type,
-      url: s.url,
-      name: s.name,
-      caption: s.caption,
-      uploadedAt: new Date().toISOString(),
-      isSample: true,
-    }));
+  // The server's cover when it has one; otherwise the first uploaded photo,
+  // which is the one the server picks (on create, or when the cover is
+  // removed from an existing listing).
+  const canBeCover = (m: ListingMedia) => m.type === 'image' && (m.status === 'processing' || m.status === 'ready');
+  const explicitCover = media.findIndex((m) => m.isCover);
+  const coverIndex = explicitCover >= 0 ? explicitCover : media.findIndex(canBeCover);
 
-    // Avoid duplicates
-    const existingUrls = new Set(media.map((m) => m.url));
-    const filtered = itemsToAdd.filter((item) => !existingUrls.has(item.url));
-
-    if (filtered.length > 0) {
-      onChange([...media, ...filtered]);
+  const handleSetCover = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setError(null);
+    try {
+      await mediaService.update(id, { isCover: true });
+      commit(mediaRef.current.map((m) => ({ ...m, isCover: m.id === id })));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not set the cover photo.');
     }
   };
 
-  const coverIndex = media.findIndex((m) => m.type === 'image' && !m.isSample && m.status !== 'failed');
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <label className="block text-xs font-bold text-gray-900">
-            Produce Photos &amp; Inspection Videos
-          </label>
-          <p className="text-[11px] text-gray-500">
-            Upload high-resolution pictures and video clips of the harvest, bags, and warehouse.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleAddSamplePreset}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-          + Add Sample Produce Media
-        </button>
+      <div>
+        <label className="block text-xs font-bold text-gray-900">
+          Produce Photos &amp; Inspection Videos
+        </label>
+        <p className="text-[11px] text-gray-500">
+          Upload high-resolution pictures and video clips of the harvest, bags, and warehouse.
+        </p>
       </div>
 
       {/* Drag & Drop Box */}
@@ -397,17 +314,21 @@ export function MediaUploader({
                       <span className="text-[9px] text-red-100 mt-1">Remove and try again</span>
                     </div>
                   )}
-                  {item.isSample && (
-                    <span className="absolute top-2 left-2 mt-6 px-1.5 py-0.5 rounded bg-amber-500/90 text-white text-[9px] font-bold uppercase tracking-wider">
-                      Sample · not published
-                    </span>
-                  )}
 
-                  {/* Primary Badge: the server makes the first uploaded photo the cover */}
                   {index === coverIndex && (
                     <span className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-emerald-600/90 text-white text-[9px] font-bold uppercase tracking-wider">
                       Primary Cover
                     </span>
+                  )}
+                  {/* Only attached media can be the cover, so only on an existing listing */}
+                  {listingId && index !== coverIndex && canBeCover(item) && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleSetCover(item.id, e)}
+                      className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-black/70 hover:bg-emerald-600 text-white text-[9px] font-bold uppercase tracking-wider sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity cursor-pointer"
+                    >
+                      Set as cover
+                    </button>
                   )}
 
                   {/* Remove Button */}
@@ -472,3 +393,4 @@ export function MediaUploader({
     </div>
   );
 }
+

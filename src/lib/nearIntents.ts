@@ -129,7 +129,7 @@ export async function requestUsdcDepositQuote({
     dry: false,
     slippageTolerance: 100,
     refundTo: refundAddress || recipientContract,
-    refundType: 'DESTINATION_CHAIN',
+    refundType: 'ORIGIN_CHAIN',
     depositType: 'ORIGIN_CHAIN',
     recipient: recipientContract,
     recipientType: 'DESTINATION_CHAIN',
@@ -143,8 +143,19 @@ export async function requestUsdcDepositQuote({
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to get deposit address (${response.status}): ${errorText}`);
+    let errorMsg = `Failed to get deposit address (${response.status})`;
+    try {
+      const errorJson = await response.json();
+      if (errorJson.message) {
+        errorMsg += `: ${Array.isArray(errorJson.message) ? errorJson.message.join(', ') : errorJson.message}`;
+      } else if (errorJson.error) {
+        errorMsg += `: ${errorJson.error}`;
+      }
+    } catch {
+      const errorText = await response.text().catch(() => '');
+      if (errorText) errorMsg += `: ${errorText}`;
+    }
+    throw new Error(errorMsg);
   }
 
   const data = await response.json();

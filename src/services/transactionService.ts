@@ -122,6 +122,11 @@ export const transactionService = {
     try {
       const data = await apiFetch<any[]>('/api/transactions');
       const normalized = data.map(normalizeTransaction);
+      const existing = storageService.get<Transaction[]>(STORE_KEYS.TRANSACTIONS) ?? [];
+      const map = new Map<string, Transaction>(existing.map((t) => [t.id, t]));
+      normalized.forEach((t) => map.set(t.id, t));
+      const combined = Array.from(map.values());
+      storageService.set(STORE_KEYS.TRANSACTIONS, combined);
       return normalized;
     } catch {
       return this.getAll();
@@ -132,6 +137,11 @@ export const transactionService = {
     try {
       const data = await apiFetch<any[]>('/api/transactions');
       const normalized = data.map(normalizeTransaction);
+      const existing = storageService.get<Transaction[]>(STORE_KEYS.TRANSACTIONS) ?? [];
+      const map = new Map<string, Transaction>(existing.map((t) => [t.id, t]));
+      normalized.forEach((t) => map.set(t.id, t));
+      const combined = Array.from(map.values());
+      storageService.set(STORE_KEYS.TRANSACTIONS, combined);
       return normalized;
     } catch {
       const session = storageService.get<any>(STORE_KEYS.SESSION);
@@ -146,7 +156,13 @@ export const transactionService = {
     try {
       const data = await apiFetch<any>(`/api/transactions/${id}`);
       const rawTx = data.transaction ? { ...data.transaction, history: data.history } : data;
-      return normalizeTransaction(rawTx);
+      const normalized = normalizeTransaction(rawTx);
+      const all = storageService.get<Transaction[]>(STORE_KEYS.TRANSACTIONS) ?? [];
+      const idx = all.findIndex((t) => t.id === normalized.id);
+      if (idx >= 0) all[idx] = normalized;
+      else all.unshift(normalized);
+      storageService.set(STORE_KEYS.TRANSACTIONS, all);
+      return normalized;
     } catch {
       return this.getById(id);
     }

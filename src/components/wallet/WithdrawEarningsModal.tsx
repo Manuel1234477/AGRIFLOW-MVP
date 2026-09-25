@@ -7,7 +7,6 @@ import { useToast } from '../ui/Toast';
 import { walletService, type WalletSummary } from '../../services/walletService';
 import { formatCurrency } from '../../utils/format';
 import { useUsdcNgnRate } from '../../services/fxRateService';
-import { getWalletKey, connectWallet } from '../../lib/stellar';
 
 interface Props {
   isOpen: boolean;
@@ -44,9 +43,15 @@ export function WithdrawEarningsModal({
 
   const handleConnectWallet = async () => {
     try {
-      let key = await getWalletKey();
-      if (!key) key = await connectWallet();
-      if (key) setWalletAddress(key);
+      if (typeof window !== 'undefined' && (window as any).ethereum) {
+        const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
+        if (accounts && accounts[0]) {
+          setWalletAddress(accounts[0]);
+          toast('success', 'EVM Wallet connected!');
+          return;
+        }
+      }
+      toast('info', 'Please paste your Base or Ethereum USDC wallet address.');
     } catch (e: any) {
       toast('error', e.message || 'Could not connect wallet.');
     }

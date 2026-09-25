@@ -1,15 +1,17 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, ArrowRightLeft, Truck, AlertTriangle, CheckCircle2, RotateCcw, Loader2 } from 'lucide-react';
+
 import { useApp } from '../../context/AppContext';
 import { transactionService } from '../../services/transactionService';
 import { logisticsService } from '../../services/logisticsService';
 import { disputeService } from '../../services/disputeService';
-import { storageService, STORE_KEYS } from '../../services/storageService';
 import { resetPlatformData } from '../../services/seedService';
 import { useToast } from '../../components/ui/Toast';
 import { formatCurrency, formatCommodity } from '../../utils/format';
-import { useState, useEffect } from 'react';
-import type { User, Transaction } from '../../types';
+import { adminService } from '../../services/adminService';
+import type { User, Transaction, LogisticsJob } from '../../types';
+
 
 function statusPill(status: string): string {
   const map: Record<string, string> = {
@@ -40,6 +42,8 @@ export function AdminDashboard() {
   const [showReset, setShowReset] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [allTxns, setAllTxns] = useState<Transaction[]>([]);
+  const [allJobs, setAllJobs] = useState<LogisticsJob[]>([]);
+  const [allUsers, setAllUsers] = useState<Omit<User, 'passwordHash'>[]>([]);
   const [_loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,8 +51,16 @@ export function AdminDashboard() {
     async function load() {
       setLoading(true);
       try {
-        const txs = await transactionService.fetchAll();
-        if (isMounted) setAllTxns(txs);
+        const [txs, jobs, usersRes] = await Promise.all([
+          transactionService.fetchAll(),
+          logisticsService.fetchAll(),
+          adminService.fetchUsers({ limit: 100 }),
+        ]);
+        if (isMounted) {
+          setAllTxns(txs);
+          setAllJobs(jobs);
+          setAllUsers(usersRes.users);
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -59,9 +71,8 @@ export function AdminDashboard() {
 
   if (!session) return null;
 
-  const allUsers = storageService.get<User[]>(STORE_KEYS.USERS) ?? [];
-  const allJobs = logisticsService.getAll();
   const disputes = disputeService.getOpen();
+
 
   const buyers = allUsers.filter((u) => u.role === 'buyer').length;
   const suppliers = allUsers.filter((u) => u.role === 'supplier').length;

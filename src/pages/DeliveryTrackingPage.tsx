@@ -35,6 +35,7 @@ const STATUS_PROGRESS: Partial<Record<TransactionStatus, number>> = {
 };
 
 const DELIVERY_ACTIVE_STATUSES: TransactionStatus[] = [
+  'PAYMENT_CONFIRMED',
   'LOGISTICS_PENDING',
   'LOGISTICS_ASSIGNED',
   'LOGISTICS_ACCEPTED',
@@ -64,42 +65,59 @@ export function DeliveryTrackingPage() {
     async function loadData() {
       setLoading(true);
       try {
-        let allTxns: Transaction[] = [];
-        if (session?.role === 'buyer') {
-          allTxns = transactionService.getForBuyer(session.userId);
-        } else if (session?.role === 'supplier') {
-          allTxns = transactionService.getForSupplier(session.userId);
-        } else if (session?.role === 'logistics') {
-          const myJobs = logisticsService.getForProvider(session.userId);
-          const jobTxnIds = myJobs.map((j) => j.transactionId);
-          allTxns = transactionService.getAll().filter((t) => jobTxnIds.includes(t.id));
-          if (allTxns.length === 0) {
-            allTxns = transactionService.getAll();
+        const [liveTxns, liveJobs] = await Promise.all([
+          transactionService.fetchMine(),
+          logisticsService.fetchAll(),
+        ]);
+
+        let userTxns = liveTxns;
+        if (session?.role === 'logistics') {
+          const myJobTxnIds = liveJobs
+            .filter((j) => j.providerId === session.userId)
+            .map((j) => j.transactionId);
+          const filtered = liveTxns.filter((t) => myJobTxnIds.includes(t.id));
+          if (filtered.length > 0) {
+            userTxns = filtered;
           }
-        } else {
-          allTxns = transactionService.getAll();
         }
 
-        const validDeliverables = allTxns.filter((t) => DELIVERY_ACTIVE_STATUSES.includes(t.status));
+        const validDeliverables = userTxns.filter((t) => DELIVERY_ACTIVE_STATUSES.includes(t.status));
+        const activeList = validDeliverables.length > 0 ? validDeliverables : userTxns;
 
         if (isMounted) {
-          setAllDeliverables(validDeliverables);
+          setAllDeliverables(activeList);
         }
 
-        const targetId = id || validDeliverables[0]?.id;
-        if (targetId) {
-          const t = await transactionService.fetchById(targetId);
-          if (isMounted && t) {
-            setTx(t);
-            const j =
-              logisticsService.getForTransaction(t.id) ||
-              (t.logisticsJobId ? logisticsService.getById(t.logisticsJobId) : null);
-            setJob(j);
+        let targetTxn: Transaction | null = null;
+        if (id) {
+          targetTxn = await transactionService.fetchById(id);
+          if (!targetTxn) {
+            const matchedJob = liveJobs.find((j) => j.id === id);
+            if (matchedJob) {
+              targetTxn = await transactionService.fetchById(matchedJob.transactionId);
+            }
           }
+        }
+
+        if (!targetTxn) {
+          targetTxn = activeList[0] || null;
+        }
+
+        if (isMounted && targetTxn) {
+          setTx(targetTxn);
+          const j =
+            liveJobs.find(
+              (job) => job.transactionId === targetTxn!.id || (targetTxn!.logisticsJobId && job.id === targetTxn!.logisticsJobId)
+            ) ||
+            logisticsService.getForTransaction(targetTxn.id) ||
+            (targetTxn.logisticsJobId ? logisticsService.getById(targetTxn.logisticsJobId) : null);
+          setJob(j);
         } else if (isMounted) {
           setTx(null);
           setJob(null);
         }
+      } catch (err) {
+        console.error('Failed to load tracking data:', err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -111,16 +129,18 @@ export function DeliveryTrackingPage() {
     };
   }, [id, session]);
 
-  const hasDelivery = tx !== null && DELIVERY_ACTIVE_STATUSES.includes(tx.status);
+  const hasDelivery = tx !== null;
   const progress = tx ? STATUS_PROGRESS[tx.status] ?? 50 : 50;
   const isCompleted = tx?.status === 'COMPLETED';
   const isDelivered = tx?.status === 'DELIVERED' || tx?.status === 'BUYER_CONFIRMATION_PENDING';
   const carrierName =
     job?.providerName ||
     tx?.history?.find((h) => h.actorRole === 'logistics')?.actor ||
-    'SwiftHaul Logistics';
+    (['PAYMENT_CONFIRMED', 'LOGISTICS_PENDING'].includes(tx?.status || '')
+      ? 'Awaiting Logistics Assignment'
+      : 'AgriFlow Logistics Partner');
 
-  if (!loading && (!hasDelivery || allDeliverables.length === 0)) {
+  if (!loading && (!hasDelivery || allDeliverables.length === 0 || !tx)) {
     return (
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">

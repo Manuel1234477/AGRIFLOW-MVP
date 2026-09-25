@@ -1,15 +1,12 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { disputeService } from '../../services/disputeService';
 import { transactionService } from '../../services/transactionService';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../components/ui/Toast';
-import { Loader2 } from 'lucide-react';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { formatDateTime } from '../../utils/format';
-import { invokeContract, txIdToScVal, getWalletKey } from '../../lib/stellar';
 import type { Dispute, Transaction } from '../../types';
-
 
 export function AdminDisputesPage() {
   const { session, refreshNotifications } = useApp();
@@ -43,15 +40,6 @@ export function AdminDisputesPage() {
     if (!resolving || !resolution.decision) { toast('error', 'Provide a resolution decision.'); return; }
     setLoading(true);
     try {
-      // If dispute is upheld (cancelled), refund buyer on-chain
-      if (resolution.outcome === 'cancelled') {
-        const pubKey = await getWalletKey();
-        if (!pubKey) throw new Error('Connect admin wallet to authorize refund');
-        const txIdVal = await txIdToScVal(resolving.transactionId);
-        const hash = await invokeContract('refund', [txIdVal], pubKey);
-        toast('info', `On-chain refund submitted: ${hash.slice(0, 10)}...`);
-      }
-
       // Update dispute record state via dispute service
       await disputeService.resolve({
         disputeId: resolving.id,

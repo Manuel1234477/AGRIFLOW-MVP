@@ -51,12 +51,13 @@ export function LogisticsJobDetailPage() {
 
   const refresh = async () => {
     if (!id) return;
-    const j = logisticsService.getById(id);
+    const j = await logisticsService.fetchById(id);
     setJob(j);
-    if (j) setTxn(await transactionService.getById(j.transactionId));
+    if (j) setTxn(await transactionService.fetchById(j.transactionId));
   };
 
   useEffect(() => { refresh(); }, [id]);
+
 
   if (!job || !session) return <div className="p-6 text-gray-500">Job not found.</div>;
 

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE listing_media SET is_cover = TRUE, updated_at = now()\n           WHERE id = (SELECT id FROM listing_media\n                       WHERE listing_id = $1 AND kind = 'image' AND status IN ('processing', 'ready')\n                       ORDER BY sort_order, created_at LIMIT 1)\n             AND NOT EXISTS (SELECT 1 FROM listing_media WHERE listing_id = $1 AND is_cover)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b9b0c5aef1f06cad6cc9ddbcdc190df977fb5a3b47256de5a082487d2307d3eb"
+}

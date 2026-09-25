@@ -6,21 +6,25 @@ import { formatCurrency, formatDateTime } from '../../utils/format';
 import { walletService, type WalletSummary } from '../../services/walletService';
 import { WithdrawEarningsModal } from './WithdrawEarningsModal';
 
+import type { Transaction, LogisticsJob } from '../../types';
+
 interface Props {
   userId: string;
   userName: string;
   userRole: 'supplier' | 'logistics';
+  transactions?: Transaction[];
+  jobs?: LogisticsJob[];
   onUpdated?: () => void;
 }
 
-export function EscrowEarningsCard({ userId, userName, userRole, onUpdated }: Props) {
+export function EscrowEarningsCard({ userId, userName, userRole, transactions, jobs, onUpdated }: Props) {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   const summary: WalletSummary =
     userRole === 'supplier'
-      ? walletService.getSupplierBalance(userId)
-      : walletService.getLogisticsBalance(userId);
+      ? walletService.getSupplierBalance(userId, transactions)
+      : walletService.getLogisticsBalance(userId, jobs);
 
   const withdrawals = walletService.getWithdrawals(userId);
 

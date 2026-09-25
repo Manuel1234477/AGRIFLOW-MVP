@@ -79,11 +79,10 @@ export const supplyService = {
     media?: ListingMedia[];
     inspectionDetails?: InspectionDetails;
   }): Promise<SupplyListing> {
-    // Only files actually uploaded to the media bucket are published;
-    // local demo samples and failed uploads stay behind.
     const mediaIds = (params.media ?? [])
-      .filter((m) => !m.isSample && (m.status === 'processing' || m.status === 'ready'))
+      .filter((m) => m.status === 'processing' || m.status === 'ready')
       .map((m) => m.id);
+
     try {
       const data = await apiFetch<any>('/api/listings', {
         method: 'POST',

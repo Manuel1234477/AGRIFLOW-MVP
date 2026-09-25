@@ -57,11 +57,10 @@ export interface ListingMedia {
   isCover?: boolean;
   sortOrder?: number;
   processingError?: string;
-  // Client-only: upload progress 0..1, and whether this is a local demo
-  // sample (never uploaded, so never published).
+  // Client-only: upload progress 0..1
   progress?: number;
-  isSample?: boolean;
 }
+
 
 export interface InspectionDetails {
   moistureContent?: string;

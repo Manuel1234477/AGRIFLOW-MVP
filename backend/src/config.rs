@@ -13,6 +13,16 @@ pub struct Config {
     pub resend_api_key: Option<String>,
     /// Sender for outgoing email, e.g. `AgriFlow <hello@yourdomain.com>`.
     pub email_from: String,
+    /// Bachs.io API key (`sk_sandbox_...` or `sk_live_...`). Unset → Bachs
+    /// checkout is disabled and the checkout-session endpoint returns 503.
+    pub bachs_secret_key: Option<String>,
+    /// Signing secret for the Bachs webhook endpoint (`whsec_...`). Unset →
+    /// every webhook delivery is rejected, since none can be verified.
+    pub bachs_webhook_secret: Option<String>,
+    /// Public origin of the React app, e.g. `https://agri-flowmvp.vercel.app`
+    /// (no trailing slash). Bachs checkout redirects are only allowed back to
+    /// this origin, and it builds the default success/cancel URLs.
+    pub frontend_base_url: Option<String>,
 }
 
 impl Config {
@@ -41,6 +51,10 @@ impl Config {
         // only delivers to the Resend account owner's own address.
         let email_from =
             non_empty("EMAIL_FROM").unwrap_or_else(|| "AgriFlow <onboarding@resend.dev>".into());
+        let bachs_secret_key = non_empty("BACHS_SECRET_KEY");
+        let bachs_webhook_secret = non_empty("BACHS_WEBHOOK_SECRET");
+        let frontend_base_url =
+            non_empty("FRONTEND_BASE_URL").map(|v| v.trim().trim_end_matches('/').to_string());
 
         Ok(Self {
             database_url,
@@ -50,6 +64,9 @@ impl Config {
             admin_registration_key,
             resend_api_key,
             email_from,
+            bachs_secret_key,
+            bachs_webhook_secret,
+            frontend_base_url,
         })
     }
 }

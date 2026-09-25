@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE payments SET\n             status = 'CONFIRMED',\n             provider_reference = COALESCE($2, provider_reference),\n             failure_reason = NULL,\n             completed_at = COALESCE(completed_at, now()),\n             updated_at = now()\n           WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ea78f2125785f8c85eac08d1049846cc7db29f86bec11a8828a99bd2ddb99b29"
+}

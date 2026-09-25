@@ -8,4 +8,6 @@ pub struct AppState {
     pub db: PgPool,
     pub config: Config,
     pub mailer: Mailer,
+    /// Shared HTTP client for outbound provider calls (Bachs).
+    pub http: reqwest::Client,
 }

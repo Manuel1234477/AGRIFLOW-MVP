@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE disputes SET\n            status = 'RESOLVED',\n            resolution = $2,\n            resolved_by_id = $3,\n            resolved_by_name = $4,\n            resolved_at = now(),\n            updated_at = now()\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b29645f624821432109cea97f8664a6339c6225b1542549bb17459d86daca181"
+}

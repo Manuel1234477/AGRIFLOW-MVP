@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bachs_webhook_events (event_id, event_type, payment_id, payload)\n           VALUES ($1, $2, $3, $4)\n           ON CONFLICT (event_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cc66f6394697828542b90d6438177c8d13eb9cfc22bbeff54a41cbae6372ce7a"
+}

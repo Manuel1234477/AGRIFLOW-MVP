@@ -5,10 +5,14 @@ use axum::{
 use std::str::FromStr;
 
 use crate::auth::AuthUser;
+use crate::bachs;
 use crate::error::{AppError, AppResult};
 use crate::ids;
 use crate::models::listing::SupplyListing;
-use crate::models::payment::{ConfirmPaymentRequest, InitiatePaymentRequest, Payment};
+use crate::models::payment::{
+    BachsCheckoutRequest, BachsCheckoutResponse, ConfirmPaymentRequest, InitiatePaymentRequest,
+    Payment,
+};
 use crate::models::transaction::{
     CreateTransactionRequest, MockPaymentFailRequest, Transaction, TransactionEvent,
     TransactionWithHistory, TransitionRequest,
@@ -409,7 +413,7 @@ pub(crate) async fn history_for(state: &AppState, id: &str) -> AppResult<Vec<Tra
     .await?)
 }
 
-async fn payment_for_txn(state: &AppState, transaction_id: &str) -> AppResult<Option<Payment>> {
+pub(crate) async fn payment_for_txn(state: &AppState, transaction_id: &str) -> AppResult<Option<Payment>> {
     Ok(sqlx::query_as!(
         Payment,
         r#"SELECT id, transaction_id, payer_id, amount, currency, provider, provider_reference,
@@ -507,6 +511,7 @@ pub async fn mock_confirm_payment(
     let payment = payment_for_txn(&state, &id)
         .await?
         .ok_or_else(|| AppError::BadRequest("Call payment/initiate before confirming.".into()))?;
+    reject_if_bachs(&payment)?;
 
     if payment.status != "CONFIRMED" {
         let provider_reference = payment.provider_reference.unwrap_or_else(ids::provider_reference);
@@ -580,6 +585,7 @@ pub async fn mock_fail_payment(
     let payment = payment_for_txn(&state, &id)
         .await?
         .ok_or_else(|| AppError::BadRequest("Call payment/initiate before reporting failure.".into()))?;
+    reject_if_bachs(&payment)?;
 
     let reason = body.reason.unwrap_or_else(|| "Payment failed.".to_string());
 
@@ -603,6 +609,129 @@ pub async fn mock_fail_payment(
 
     let history = history_for(&state, &id).await?;
     Ok(Json(TransactionWithHistory { transaction, history }))
+}
+
+/// A Bachs payment is settled only by its signature-verified webhook
+/// (`routes::webhooks::bachs`). Letting the buyer confirm it here would let
+/// them mark a checkout "paid" by simply landing on the success redirect.
+fn reject_if_bachs(payment: &Payment) -> AppResult<()> {
+    if payment.provider == bachs::PROVIDER {
+        return Err(AppError::Conflict(
+            "This payment is being settled through Bachs checkout and can only be confirmed by Bachs.".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Only redirect targets on the frontend's own origin are accepted, so the
+/// checkout can't be turned into an open redirect. With `FRONTEND_BASE_URL`
+/// unset (local dev) any URL the client sends is passed through.
+fn redirect_url(state: &AppState, requested: Option<String>, default_path: String) -> Option<String> {
+    let Some(base) = state.config.frontend_base_url.as_deref() else {
+        return requested;
+    };
+    match requested {
+        Some(url) if url == base || url.starts_with(&format!("{base}/")) => Some(url),
+        _ => Some(format!("{base}{default_path}")),
+    }
+}
+
+/// Creates a Bachs hosted checkout for the payment `initiate_payment`
+/// created and returns its URL for the browser to redirect to. The amount
+/// and currency come from that payment row, never from this request.
+///
+/// Marks the payment as Bachs-sourced, which hands settlement to the
+/// webhook: from here on only `POST /webhooks/bachs` can confirm or fail it.
+/// Calling this again (the buyer abandoned a checkout, or a previous attempt
+/// failed) opens a fresh checkout for the same payment; webhooks find the
+/// payment through the `payment_id` metadata, so events for an earlier
+/// checkout still settle the right row.
+pub async fn create_bachs_checkout_session(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+    Json(body): Json<BachsCheckoutRequest>,
+) -> AppResult<Json<BachsCheckoutResponse>> {
+    let txn = load_transaction(&state, &id).await?;
+    assert_is_buyer_on_txn(&auth, &txn)?;
+
+    let secret_key = state.config.bachs_secret_key.as_deref().ok_or_else(|| {
+        AppError::ServiceUnavailable("Bachs checkout is not configured on this server.".into())
+    })?;
+
+    let payment = payment_for_txn(&state, &id)
+        .await?
+        .ok_or_else(|| AppError::BadRequest("Call payment/initiate before starting checkout.".into()))?;
+
+    match payment.status.as_str() {
+        "PENDING" | "PROCESSING" | "FAILED" => {}
+        "CONFIRMED" => return Err(AppError::Conflict("This payment has already been confirmed.".into())),
+        other => return Err(AppError::Conflict(format!("Cannot start checkout for a {other} payment."))),
+    }
+    let txn_status = TransactionStatus::from_str(&txn.status)
+        .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+    if !matches!(txn_status, TransactionStatus::PaymentPending | TransactionStatus::PaymentFailed) {
+        return Err(AppError::Conflict(format!(
+            "Checkout can only start while the transaction is awaiting payment (it is {}).",
+            txn.status
+        )));
+    }
+
+    let success_url = redirect_url(&state, body.success_url, format!("/app/transactions/{id}?payment=success"));
+    let cancel_url = redirect_url(&state, body.cancel_url, format!("/app/transactions/{id}/pay?payment=cancelled"));
+
+    let session = bachs::create_checkout_session(
+        &state.http,
+        secret_key,
+        bachs::CheckoutRequest {
+            amount: payment.amount,
+            currency: &payment.currency,
+            customer_email: &auth.email,
+            customer_name: &auth.name,
+            success_url: success_url.as_deref(),
+            cancel_url: cancel_url.as_deref(),
+            transaction_id: &id,
+            payment_id: &payment.id,
+        },
+    )
+    .await
+    .map_err(|e| AppError::BadGateway(format!("{e:#}")))?;
+
+    let mut db_tx = state.db.begin().await?;
+    sqlx::query!(
+        r#"UPDATE payments SET
+             provider = $2,
+             provider_reference = $3,
+             status = 'PROCESSING',
+             failure_reason = NULL,
+             updated_at = now()
+           WHERE id = $1"#,
+        payment.id,
+        bachs::PROVIDER,
+        session.checkout_id,
+    )
+    .execute(&mut *db_tx)
+    .await?;
+    // Retrying after a failed attempt: reopen the transaction for payment
+    // so the webhook's PAYMENT_PENDING -> PAYMENT_CONFIRMED move is legal.
+    if txn_status == TransactionStatus::PaymentFailed {
+        apply_transition(
+            &mut db_tx,
+            &id,
+            TransactionStatus::PaymentPending,
+            Actor::Buyer,
+            &auth.name,
+            "buyer",
+            "Buyer retried payment via Bachs checkout.",
+        )
+        .await?;
+    }
+    db_tx.commit().await?;
+
+    Ok(Json(BachsCheckoutResponse {
+        checkout_id: session.checkout_id,
+        checkout_url: session.checkout_url,
+    }))
 }
 
 /// Reads the payment record for a transaction, if one exists yet.

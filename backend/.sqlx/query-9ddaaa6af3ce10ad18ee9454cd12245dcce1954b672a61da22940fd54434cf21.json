@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE payments SET\n             provider = $2,\n             provider_reference = $3,\n             status = 'PROCESSING',\n             failure_reason = NULL,\n             updated_at = now()\n           WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9ddaaa6af3ce10ad18ee9454cd12245dcce1954b672a61da22940fd54434cf21"
+}

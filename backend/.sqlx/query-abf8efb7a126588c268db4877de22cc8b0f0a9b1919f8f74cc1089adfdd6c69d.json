@@ -1,0 +1,170 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, transaction_id, raised_by_id, raised_by_name, reason, description,\n                   status, resolution, resolved_by_id, resolved_by_name, resolved_at,\n                   created_at, updated_at\n            FROM disputes ORDER BY created_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "disputes",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "transaction_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "disputes",
+            "name": "transaction_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "raised_by_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "disputes",
+            "name": "raised_by_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "raised_by_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "disputes",
+            "name": "raised_by_name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "reason",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "disputes",
+            "name": "reason"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "disputes",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "disputes",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "resolution",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "disputes",
+            "name": "resolution"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "resolved_by_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "disputes",
+            "name": "resolved_by_id"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "resolved_by_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "disputes",
+            "name": "resolved_by_name"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "resolved_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "disputes",
+            "name": "resolved_at"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "disputes",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "disputes",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "abf8efb7a126588c268db4877de22cc8b0f0a9b1919f8f74cc1089adfdd6c69d"
+}

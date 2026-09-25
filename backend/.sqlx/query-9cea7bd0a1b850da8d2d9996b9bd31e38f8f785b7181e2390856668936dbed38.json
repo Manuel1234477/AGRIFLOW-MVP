@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO disputes (id, transaction_id, raised_by_id, raised_by_name, reason, description, status)\n        VALUES ($1, $2, $3, $4, $5, $6, 'OPEN')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9cea7bd0a1b850da8d2d9996b9bd31e38f8f785b7181e2390856668936dbed38"
+}

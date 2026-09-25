@@ -34,3 +34,17 @@ pub struct ConfirmPaymentRequest {
     pub provider: Option<String>,
     pub stellar_tx_hash: Option<String>,
 }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BachsCheckoutRequest {
+    pub success_url: Option<String>,
+    pub cancel_url: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BachsCheckoutResponse {
+    pub checkout_id: String,
+    pub checkout_url: String,
+}

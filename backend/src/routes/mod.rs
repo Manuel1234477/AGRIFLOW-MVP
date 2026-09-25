@@ -1,10 +1,12 @@
 pub mod admin;
 pub mod auth;
 pub mod demands;
+pub mod disputes;
 pub mod health;
 pub mod listings;
 pub mod logistics;
 pub mod transactions;
+pub mod webhooks;
 
 use axum::{Router, routing::{get, patch, post}};
 use tower_http::cors::CorsLayer;
@@ -34,10 +36,17 @@ pub fn build(state: AppState) -> Router {
         .route("/transactions/{id}/payment/initiate", post(transactions::initiate_payment))
         .route("/transactions/{id}/payment/confirm", post(transactions::mock_confirm_payment))
         .route("/transactions/{id}/payment/fail", post(transactions::mock_fail_payment))
+        .route(
+            "/transactions/{id}/payment/bachs/checkout-session",
+            post(transactions::create_bachs_checkout_session),
+        )
+        .route("/webhooks/bachs", post(webhooks::bachs))
         .route("/logistics/jobs", get(logistics::list_jobs))
         .route("/logistics/jobs/{id}/claim", post(logistics::claim_job))
         .route("/logistics/jobs/{id}/assign", post(logistics::assign_job))
         .route("/logistics/jobs/{id}/status", patch(logistics::update_status))
+        .route("/disputes", get(disputes::list).post(disputes::raise))
+        .route("/disputes/{id}/resolve", post(disputes::resolve))
         .with_state(state);
 
     Router::new()

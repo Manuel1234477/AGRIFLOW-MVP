@@ -14,9 +14,6 @@ pub struct AuthUser {
     pub user_id: String,
     pub role: UserRole,
     pub name: String,
-    /// Not read yet — reserved for notification/audit endpoints that need
-    /// the caller's email without a DB round-trip.
-    #[allow(dead_code)]
     pub email: String,
 }
 

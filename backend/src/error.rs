@@ -17,6 +17,11 @@ pub enum AppError {
     NotFound(String),
     #[error("{0}")]
     Conflict(String),
+    #[error("{0}")]
+    ServiceUnavailable(String),
+    /// An upstream provider (e.g. Bachs) rejected or failed a call we made.
+    #[error("{0}")]
+    BadGateway(String),
     #[error(transparent)]
     Database(#[from] sqlx::Error),
     #[error(transparent)]
@@ -33,6 +38,11 @@ impl IntoResponse for AppError {
             AppError::Forbidden(m) => (StatusCode::FORBIDDEN, m.clone()),
             AppError::NotFound(m) => (StatusCode::NOT_FOUND, m.clone()),
             AppError::Conflict(m) => (StatusCode::CONFLICT, m.clone()),
+            AppError::ServiceUnavailable(m) => (StatusCode::SERVICE_UNAVAILABLE, m.clone()),
+            AppError::BadGateway(m) => {
+                tracing::error!(error = %m, "upstream provider error");
+                (StatusCode::BAD_GATEWAY, "The payment provider could not process this request.".to_string())
+            }
             AppError::Jwt(_) => (
                 StatusCode::UNAUTHORIZED,
                 "Invalid or expired token.".to_string(),

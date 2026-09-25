@@ -430,6 +430,12 @@ pub(crate) async fn payment_for_txn(state: &AppState, transaction_id: &str) -> A
 /// transition the generic /transition endpoint already allows a buyer to
 /// drive. Idempotent: calling it again for the same transaction returns the
 /// existing record rather than creating a second one.
+///
+/// Also performs that ACCEPTED -> PAYMENT_PENDING move itself when the
+/// transaction is still ACCEPTED. The frontend fires /transition first, but
+/// only when its cached copy says ACCEPTED and it swallows any error, so a
+/// stale cache used to leave the transaction ACCEPTED and every settlement
+/// path (Bachs checkout, mock confirm) would then 409.
 pub async fn initiate_payment(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -438,6 +444,21 @@ pub async fn initiate_payment(
 ) -> AppResult<Json<Payment>> {
     let txn = load_transaction(&state, &id).await?;
     assert_is_buyer_on_txn(&auth, &txn)?;
+
+    if txn.status == TransactionStatus::Accepted.as_str() {
+        let mut db_tx = state.db.begin().await?;
+        apply_transition(
+            &mut db_tx,
+            &id,
+            TransactionStatus::PaymentPending,
+            Actor::Buyer,
+            &auth.name,
+            "buyer",
+            "Buyer initiated payment.",
+        )
+        .await?;
+        db_tx.commit().await?;
+    }
 
     if let Some(existing) = payment_for_txn(&state, &id).await? {
         return Ok(Json(existing));

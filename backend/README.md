@@ -92,9 +92,11 @@ All routes are under `/api`.
 | GET    | `/transactions/:id`                  | participant or admin | Includes full event history |
 | POST   | `/transactions/:id/transition`        | participant (role-gated by state machine) | `{ "to": "ACCEPTED", "note": "..." }` |
 | GET    | `/transactions/:id/payment`            | participant or admin | The transaction's payment record, if one exists |
-| POST   | `/transactions/:id/payment/initiate`   | buyer (owner)      | `{ "amount": 10000, "currency": "NGN" }`. Idempotent |
+| POST   | `/transactions/:id/payment/initiate`   | buyer (owner)      | `{ "amount": 10000, "currency": "NGN" }`. Idempotent. Also moves an `ACCEPTED` transaction to `PAYMENT_PENDING`, so the frontend's own `/transition` call is optional |
 | POST   | `/transactions/:id/payment/confirm`    | buyer (owner)      | Mock escrow settlement -- see `transactions.rs::mock_confirm_payment` doc comment for why this is buyer-triggered rather than a real payment webhook. Atomically settles the payment, drives the transaction to `LOGISTICS_PENDING`, and auto-creates its `logistics_jobs` row |
 | POST   | `/transactions/:id/payment/fail`       | buyer (owner)      | `{ "reason": "..." }` |
+| POST   | `/transactions/:id/payment/bachs/checkout-session` | buyer (owner) | `{ "successUrl"?, "cancelUrl"? }` → `{ checkoutId, checkoutUrl }`. Creates a Bachs hosted checkout for the initiated payment's amount (never taken from the request). Transaction must be `PAYMENT_PENDING` or `PAYMENT_FAILED` (`409` otherwise). Redirect URLs off `FRONTEND_BASE_URL` are replaced with defaults. `503` if Bachs isn't configured, `502` if Bachs rejects the call. After this, `payment/confirm` and `payment/fail` return `409` for the payment |
+| POST   | `/webhooks/bachs`                      | Bachs signature      | `collection.succeeded` → payment `CONFIRMED`, transaction → `LOGISTICS_PENDING` + logistics job. `collection.failed` → payment `FAILED`, transaction → `PAYMENT_FAILED`. `401` on a bad or stale signature. Deduplicated on the event id |
 | GET    | `/logistics/jobs`                     | logistics or admin | Logistics sees unclaimed (`PENDING`) jobs plus their own; admin sees all |
 | POST   | `/logistics/jobs/:id/claim`           | logistics           | Self-assigns an unclaimed job. `409` if already claimed |
 | POST   | `/logistics/jobs/:id/assign`          | admin                | `{ "providerId": "..." }` -- must be a `logistics`-role user |

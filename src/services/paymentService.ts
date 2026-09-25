@@ -44,23 +44,16 @@ export const paymentService = {
     amount: number;
     currency: string;
   }): Promise<Payment> {
-    const currentTxn = transactionService.getById(params.transactionId);
-    if (currentTxn && currentTxn.status === 'ACCEPTED') {
-      try {
-        await transactionService.transition({
-          transactionId: params.transactionId,
+    try {
+      await apiFetch<any>(`/api/transactions/${params.transactionId}/transition`, {
+        method: 'POST',
+        body: JSON.stringify({
           to: 'PAYMENT_PENDING',
-          actorId: params.payerId,
-          actorName: params.payerName,
-          actorRole: 'buyer',
           note: 'Buyer initiated payment.',
-        });
-      } catch {
-        // Already past ACCEPTED, or the backend is unreachable -- the
-        // initiate call below is the one that actually needs to succeed,
-        // so let it surface the real error rather than failing here on a
-        // transition that may simply no longer be necessary.
-      }
+        }),
+      });
+    } catch {
+      // If already PAYMENT_PENDING or beyond, or transition endpoint rejected because it is already pending, proceed
     }
 
     const raw = await apiFetch<unknown>(`/api/transactions/${params.transactionId}/payment/initiate`, {
@@ -134,6 +127,18 @@ export const paymentService = {
   // client this replaces, src/lib/bachs.ts). Requires initiate() to have
   // been called first, same as confirm()/fail().
   async createBachsCheckoutSession(transactionId: string): Promise<{ checkoutUrl: string }> {
+    try {
+      await apiFetch<any>(`/api/transactions/${transactionId}/transition`, {
+        method: 'POST',
+        body: JSON.stringify({
+          to: 'PAYMENT_PENDING',
+          note: 'Buyer initiated Bachs checkout session',
+        }),
+      });
+    } catch {
+      // Ignore if already in PAYMENT_PENDING
+    }
+
     const origin = typeof window !== 'undefined' ? window.location.origin : undefined;
     const successUrl = origin ? `${origin}/app/transactions/${transactionId}?payment=success` : undefined;
     const cancelUrl = origin ? `${origin}/app/transactions/${transactionId}/pay?payment=cancelled` : undefined;

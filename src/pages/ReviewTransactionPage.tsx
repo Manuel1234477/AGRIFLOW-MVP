@@ -1,20 +1,27 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../components/ui/Toast';
 import { transactionService } from '../services/transactionService';
 import { supplyService } from '../services/supplyService';
+import { demandService } from '../services/demandService';
 import { ListingMediaViewer } from '../components/ui/ListingMediaViewer';
 import { formatCommodity, formatCurrency } from '../utils/format';
-import type { SupplyListing } from '../types';
+import type { SupplyListing, DemandRequest } from '../types';
 
 export function ReviewTransactionPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const demandId = searchParams.get('demandId');
+
   const navigate = useNavigate();
   const { session } = useApp();
   const { toast } = useToast();
   const [sending, setSending] = useState(false);
   const [listing, setListing] = useState<SupplyListing | null>(null);
+  const [demand, setDemand] = useState<DemandRequest | null>(null);
+  const [orderQuantity, setOrderQuantity] = useState<number>(12);
+  const [deliveryLocation, setDeliveryLocation] = useState<string>('Ikeja, Lagos');
 
   useEffect(() => {
     if (!id) return;
@@ -22,16 +29,27 @@ export function ReviewTransactionPage() {
     let isMounted = true;
     async function load() {
       const l = await supplyService.fetchById(targetId);
-      if (isMounted) setListing(l);
+      if (isMounted && l) {
+        setListing(l);
+        setOrderQuantity(l.quantity);
+      }
+      if (demandId) {
+        const d = await demandService.fetchById(demandId);
+        if (isMounted && d) {
+          setDemand(d);
+          if (l) setOrderQuantity(Math.min(d.quantity, l.quantity));
+          if (d.destinationLocation) setDeliveryLocation(d.destinationLocation);
+        }
+      }
     }
     load();
     return () => { isMounted = false; };
-  }, [id]);
+  }, [id, demandId]);
 
   const supplierName = listing?.supplierName || 'Adeyemi Produce Co.';
   const pickupLocation = listing?.location || 'Ogbomoso, Oyo State';
   const unitPrice = listing?.pricePerUnit || 480000;
-  const quantity = listing?.quantity || 12;
+  const quantity = orderQuantity || listing?.quantity || 12;
   const currency = listing?.currency || 'NGN';
   const goodsSubtotal = unitPrice * quantity;
   const logisticsCost = Math.round(goodsSubtotal * 0.035);
@@ -44,11 +62,12 @@ export function ReviewTransactionPage() {
     try {
       const tx = await transactionService.create({
         listing,
+        demand: demand || undefined,
         buyerId: session.userId,
         buyerName: session.name,
         quantity,
-        deliveryLocation: 'Lagos, Nigeria',
-        expectedDeliveryDate: new Date(Date.now() + 86400000 * 5).toISOString(),
+        deliveryLocation: deliveryLocation || 'Lagos, Nigeria',
+        expectedDeliveryDate: demand?.requiredByDate || new Date(Date.now() + 86400000 * 5).toISOString(),
       });
 
       toast('success', `Trade order ${tx.id} created! Supplier will accept before payment.`);
@@ -59,6 +78,7 @@ export function ReviewTransactionPage() {
       setSending(false);
     }
   };
+
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">

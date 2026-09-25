@@ -56,11 +56,13 @@ function AppRoutes() {
 
         {/* Demands */}
         <Route path="demands" element={<DemandsPage />} />
+        <Route path="demands/:id" element={<DemandsPage />} />
         <Route path="demands/new" element={<CreateDemandPage />} />
 
         {/* Matches (Figma Screen 4) */}
         <Route path="matches" element={<MatchResultsPage />} />
         <Route path="matches/:id" element={<MatchResultsPage />} />
+
 
         {/* Transactions & Figma flow */}
         <Route path="transactions" element={<TransactionsPage />} />

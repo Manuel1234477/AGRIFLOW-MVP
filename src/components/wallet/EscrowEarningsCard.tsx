@@ -41,8 +41,9 @@ export function EscrowEarningsCard({ userId, userName, userRole, onUpdated }: Pr
                 Escrow Earnings & Payouts
               </h2>
               <p className="text-xs text-gray-500">
-                {userRole === 'supplier' ? 'Commodity sales payouts released from Soroban Escrow' : 'Haulage fees disbursed from Soroban Escrow'}
+                {userRole === 'supplier' ? 'Commodity sales payouts released from Escrow' : 'Haulage fees disbursed from Escrow'}
               </p>
+
             </div>
           </div>
 
@@ -171,28 +172,20 @@ export function EscrowEarningsCard({ userId, userName, userRole, onUpdated }: Pr
                       <div className="text-gray-500 text-[10px]">
                         {w.method === 'bank_transfer'
                           ? `Bank Transfer (${w.bankDetails?.bankName} - ${w.bankDetails?.accountNumber})`
-                          : `Stellar USDC (${w.stellarPublicKey?.slice(0, 10)}…)`}
+                          : `Crypto USDC (${(w.walletAddress || w.stellarPublicKey)?.slice(0, 10)}…)`}
                       </div>
                     </div>
                     <div className="text-right">
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-800">
                         ✓ Disbursed
                       </span>
-                      {w.payoutTxHash && /^[0-9a-fA-F]{64}$/.test(w.payoutTxHash) ? (
-                        <a
-                          href={`https://stellar.expert/explorer/testnet/tx/${w.payoutTxHash}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block text-[10px] text-blue-600 underline mt-1 font-mono hover:text-blue-800"
-                        >
-                          Tx: {w.payoutTxHash.slice(0, 8)}…{w.payoutTxHash.slice(-6)} ↗
-                        </a>
-                      ) : (
-                        <div className="text-[10px] text-gray-400 mt-1 font-mono">{w.payoutTxHash}</div>
+                      {w.payoutTxHash && (
+                        <div className="text-[10px] text-gray-500 mt-1 font-mono">{w.payoutTxHash.slice(0, 10)}…</div>
                       )}
                       <div className="text-[10px] text-gray-400">{formatDateTime(w.createdAt)}</div>
                     </div>
                   </div>
+
                 ))}
               </div>
             )}

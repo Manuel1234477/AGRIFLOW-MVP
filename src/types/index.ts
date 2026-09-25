@@ -200,7 +200,7 @@ export interface Payment {
   currency: string;
   provider: string;
   providerReference?: string;
-  paymentMethod?: 'bachs' | 'stellar' | 'bank' | 'card' | 'other';
+  paymentMethod?: 'bachs' | 'crypto' | 'bank' | 'card' | 'other';
   bachsCheckoutSessionId?: string;
   bachsCheckoutUrl?: string;
   bachsPaymentStatus?: string;

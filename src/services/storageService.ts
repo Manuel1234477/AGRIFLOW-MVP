@@ -1,36 +1,54 @@
-// In-Memory Storage runtime store — localStorage usage has been wiped out
-// All entities are retrieved and synchronized via backend REST API endpoints
-
+// Persistent LocalStorage store with in-memory fallback
 const memoryStore = new Map<string, any>();
-
-// Auto-purge any stale agriflow localStorage keys from browser
-if (typeof window !== 'undefined' && window.localStorage) {
-  try {
-    Object.keys(window.localStorage)
-      .filter((k) => k.startsWith('agriflow_') && k !== 'agriflow_jwt' && k !== 'agriflow_lang')
-      .forEach((k) => window.localStorage.removeItem(k));
-  } catch {
-    // ignore
-  }
-}
+const PREFIX = 'agriflow_';
 
 export const storageService = {
   get<T>(key: string): T | null {
-    if (memoryStore.has(key)) {
-      return memoryStore.get(key) as T;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const item = window.localStorage.getItem(PREFIX + key);
+        if (item !== null) {
+          return JSON.parse(item) as T;
+        }
+      }
+    } catch {
+      // ignore JSON parse error
     }
-    return null;
+    return (memoryStore.get(key) as T) ?? null;
   },
 
   set<T>(key: string, value: T): void {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(PREFIX + key, JSON.stringify(value));
+      }
+    } catch {
+      // ignore localStorage quota or privacy error
+    }
     memoryStore.set(key, value);
   },
 
   remove(key: string): void {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(PREFIX + key);
+      }
+    } catch {
+      // ignore
+    }
     memoryStore.delete(key);
   },
 
   clear(): void {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        Object.keys(window.localStorage)
+          .filter((k) => k.startsWith(PREFIX))
+          .forEach((k) => window.localStorage.removeItem(k));
+      }
+    } catch {
+      // ignore
+    }
     memoryStore.clear();
   },
 };
@@ -52,3 +70,4 @@ export const STORE_KEYS = {
   WITHDRAWALS: 'withdrawals',
   SEEDED: 'seeded',
 } as const;
+

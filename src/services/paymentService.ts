@@ -84,17 +84,15 @@ export const paymentService = {
     return payment;
   },
 
-  // Backed by POST /transactions/:id/payment/confirm. `stellarTxHash` is
-  // optional and only meaningful for the on-chain deposit path -- passing
-  // it here is what makes it land in payments.stellar_tx_hash instead of
-  // only ever existing in a component's local state.
-  async confirm(paymentId: string, _actorId?: string, _actorName?: string, stellarTxHash?: string): Promise<Payment> {
+  // Backed by POST /transactions/:id/payment/confirm. `onChainTxHash` is
+  // optional and used for on-chain deposit confirmation.
+  async confirm(paymentId: string, _actorId?: string, _actorName?: string, onChainTxHash?: string): Promise<Payment> {
     const existing = this.getById(paymentId);
     if (!existing) throw new Error('Payment not found.');
 
     const txnData = await apiFetch<any>(`/api/transactions/${existing.transactionId}/payment/confirm`, {
       method: 'POST',
-      body: JSON.stringify(stellarTxHash ? { stellarTxHash } : {}),
+      body: JSON.stringify(onChainTxHash ? { stellarTxHash: onChainTxHash } : {}),
     });
 
     // The confirm response is transaction-shaped (TransactionWithHistory),

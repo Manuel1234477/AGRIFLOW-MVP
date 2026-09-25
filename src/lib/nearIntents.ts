@@ -4,10 +4,17 @@
  * API: https://1click.chaindefuser.com/v0
  */
 
+import deployedAddresses from '../contracts/addresses.json';
+
 const NEAR_INTENTS_BASE = 'https://1click.chaindefuser.com/v0';
 
 export const PLATFORM_NEAR_ADDRESS =
   (import.meta.env && import.meta.env.VITE_NEAR_PLATFORM_ADDRESS) || 'agriflow.near';
+
+export const ESCROW_CONTRACT_ADDRESS =
+  (import.meta.env && import.meta.env.VITE_AGRIFLOW_ESCROW_ADDRESS) ||
+  deployedAddresses.AgriFlowEscrow ||
+  '0x9E93B3ffF884b736fECEACa33d93f33aAfDdc6C5';
 
 // On-chain / Intent API Keys
 export const ONCHAIN_API_KEY =
@@ -73,6 +80,7 @@ export interface UsdcDepositQuote {
   estimatedFeeUsdc: number;
   expiresAt: string;
   correlationId?: string;
+  escrowContractAddress: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   raw?: any;
 }
@@ -87,16 +95,18 @@ export interface DepositStatusResult {
 }
 
 /**
- * Request a 1-Click USDC deposit quote.
+ * Request a 1-Click USDC deposit quote directing funds to AgriFlowEscrow contract.
  */
 export async function requestUsdcDepositQuote({
   amountUsdc,
   sourceChain,
-  destinationNearAddress = PLATFORM_NEAR_ADDRESS,
+  recipientContract = ESCROW_CONTRACT_ADDRESS,
+  refundAddress,
 }: {
   amountUsdc: number;
   sourceChain: SupportedUsdcChain;
-  destinationNearAddress?: string;
+  recipientContract?: string;
+  refundAddress?: string;
 }): Promise<UsdcDepositQuote> {
   const chainInfo = SUPPORTED_CHAINS[sourceChain];
   if (!chainInfo) {
@@ -110,6 +120,7 @@ export async function requestUsdcDepositQuote({
   const amountBaseUnits = Math.floor(amountUsdc * 1_000_000).toString();
   const deadline = new Date(Date.now() + 30 * 60 * 1000).toISOString();
 
+  // Flow A: Direct to Smart Contract (AgriFlowEscrow)
   const quoteRequestPayload = {
     swapType: 'EXACT_INPUT',
     originAsset,
@@ -117,11 +128,11 @@ export async function requestUsdcDepositQuote({
     amount: amountBaseUnits,
     dry: false,
     slippageTolerance: 100,
-    refundTo: destinationNearAddress,
-    refundType: 'INTENTS',
+    refundTo: refundAddress || recipientContract,
+    refundType: 'DESTINATION_CHAIN',
     depositType: 'ORIGIN_CHAIN',
-    recipient: destinationNearAddress,
-    recipientType: 'INTENTS',
+    recipient: recipientContract,
+    recipientType: 'DESTINATION_CHAIN',
     deadline,
   };
 
@@ -161,6 +172,7 @@ export async function requestUsdcDepositQuote({
     estimatedFeeUsdc,
     expiresAt,
     correlationId: data.correlationId,
+    escrowContractAddress: recipientContract,
     raw: data,
   };
 }

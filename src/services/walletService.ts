@@ -12,12 +12,13 @@ export interface WithdrawalRequest {
   userRole: 'supplier' | 'logistics';
   amount: number;
   currency: string;
-  method: 'bank_transfer' | 'stellar_usdc';
+  method: 'bank_transfer' | 'crypto_usdc';
   bankDetails?: {
     bankName: string;
     accountNumber: string;
     accountName: string;
   };
+  walletAddress?: string;
   stellarPublicKey?: string;
   status: 'COMPLETED' | 'PROCESSING' | 'FAILED';
   payoutTxHash?: string;
@@ -123,12 +124,13 @@ export const walletService = {
     userName: string;
     userRole: 'supplier' | 'logistics';
     amount: number;
-    method: 'bank_transfer' | 'stellar_usdc';
+    method: 'bank_transfer' | 'crypto_usdc' | 'stellar_usdc';
     bankDetails?: {
       bankName: string;
       accountNumber: string;
       accountName: string;
     };
+    walletAddress?: string;
     stellarPublicKey?: string;
   }): Promise<WithdrawalRequest> {
     const summary =
@@ -147,13 +149,14 @@ export const walletService = {
     }
 
     const now = new Date().toISOString();
-    const isCrypto = params.method === 'stellar_usdc';
+    const isCrypto = params.method === 'crypto_usdc' || (params.method as string) === 'stellar_usdc';
+    const targetWallet = params.walletAddress || params.stellarPublicKey;
 
     let payoutTxHash: string;
-    if (isCrypto && params.stellarPublicKey) {
+    if (isCrypto && targetWallet) {
       const usdcAmount = Math.max(1, Math.round(params.amount / 1350));
       try {
-        payoutTxHash = await mintTestnetUsdc(params.stellarPublicKey, usdcAmount);
+        payoutTxHash = await mintTestnetUsdc(targetWallet, usdcAmount);
       } catch (e: any) {
         console.warn('On-chain payout attempt failed, fallback to local reference:', e);
         payoutTxHash = `0x_payout_${Date.now().toString(16)}`;
@@ -162,6 +165,8 @@ export const walletService = {
       payoutTxHash = `NIBSS_PAY_${Date.now().toString().slice(-8)}`;
     }
 
+    const normalizedMethod = (params.method === 'stellar_usdc' ? 'crypto_usdc' : params.method) as 'bank_transfer' | 'crypto_usdc';
+
     const withdrawal: WithdrawalRequest = {
       id: generateId(),
       userId: params.userId,
@@ -169,9 +174,10 @@ export const walletService = {
       userRole: params.userRole,
       amount: params.amount,
       currency: 'NGN',
-      method: params.method,
+      method: normalizedMethod,
       bankDetails: params.bankDetails,
-      stellarPublicKey: params.stellarPublicKey,
+      walletAddress: targetWallet,
+      stellarPublicKey: targetWallet,
       status: 'COMPLETED',
       payoutTxHash,
       createdAt: now,
@@ -191,7 +197,7 @@ export const walletService = {
       detail: `Withdrawal of ₦${params.amount.toLocaleString()} disbursed via ${
         params.method === 'bank_transfer'
           ? `Bank Transfer to ${params.bankDetails?.bankName} (${params.bankDetails?.accountNumber})`
-          : `Stellar USDC to ${params.stellarPublicKey?.slice(0, 8)}…`
+          : `Crypto USDC to ${targetWallet?.slice(0, 8)}…`
       }. Ref: ${withdrawal.payoutTxHash}`,
     });
 
@@ -200,9 +206,10 @@ export const walletService = {
       type: 'payment_confirmed',
       title: 'Withdrawal Processed Successfully',
       message: `Your withdrawal of ₦${params.amount.toLocaleString()} has been processed and disbursed via ${
-        params.method === 'bank_transfer' ? 'Instant Bank Transfer' : 'Stellar USDC'
+        params.method === 'bank_transfer' ? 'Instant Bank Transfer' : 'Crypto USDC'
       }.`,
     });
+
 
     return withdrawal;
   },

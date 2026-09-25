@@ -372,21 +372,12 @@ export function BuyerDashboard() {
                       </div>
                     </div>
                     <div className="shrink-0 ml-4">
-                      {d.status === 'matched' ? (
-                        <Link
-                          to={`/app/matches?demand=${d.id}`}
-                          className="text-xs font-semibold text-gray-700 hover:text-gray-900 underline whitespace-nowrap"
-                        >
-                          View matches →
-                        </Link>
-                      ) : (
-                        <Link
-                          to={`/app/demands/${d.id}`}
-                          className="text-xs text-gray-400 hover:text-gray-700 underline whitespace-nowrap"
-                        >
-                          View
-                        </Link>
-                      )}
+                      <Link
+                        to={`/app/matches/${d.id}`}
+                        className="text-xs font-semibold text-gray-700 hover:text-gray-900 underline whitespace-nowrap"
+                      >
+                        {d.status === 'matched' ? 'View matches →' : 'Find matches →'}
+                      </Link>
                     </div>
                   </div>
                 ))}

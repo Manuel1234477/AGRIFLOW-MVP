@@ -30,6 +30,8 @@ export function CompletePaymentPage() {
   const [isUsdcModalOpen, setIsUsdcModalOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+
+
   useEffect(() => {
     if (!id) return;
     const targetId = id;
@@ -109,16 +111,14 @@ export function CompletePaymentPage() {
         currency: 'NGN',
       });
 
-      toast('info', 'Opening secure checkout...');
+      toast('info', 'Opening Bachs.io secure checkout...');
 
-      // Session creation happens server-side now -- the API secret key
-      // never reaches the browser (see src/services/paymentService.ts).
+      // Live hosted checkout session created server-side with Bachs.io API
       const sessionData = await paymentService.createBachsCheckoutSession(tx.id);
-
       if (sessionData && sessionData.checkoutUrl) {
         window.location.href = sessionData.checkoutUrl;
       } else {
-        throw new Error('No checkout URL returned.');
+        throw new Error('Failed to retrieve Bachs checkout URL.');
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Checkout initiation failed.';
@@ -127,6 +127,8 @@ export function CompletePaymentPage() {
       setPaying(false);
     }
   };
+
+
 
   const handleUsdcDepositSuccess = async (quote: UsdcDepositQuote) => {
     if (!tx || !session) return;

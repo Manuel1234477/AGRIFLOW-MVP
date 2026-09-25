@@ -34,6 +34,19 @@ const STATUS_PROGRESS: Partial<Record<TransactionStatus, number>> = {
   DELIVERY_FAILED: 50,
 };
 
+const DELIVERY_ACTIVE_STATUSES: TransactionStatus[] = [
+  'LOGISTICS_PENDING',
+  'LOGISTICS_ASSIGNED',
+  'LOGISTICS_ACCEPTED',
+  'READY_FOR_PICKUP',
+  'PICKED_UP',
+  'IN_TRANSIT',
+  'DELIVERED',
+  'DELIVERY_CONFIRMED',
+  'BUYER_CONFIRMATION_PENDING',
+  'COMPLETED',
+];
+
 export function DeliveryTrackingPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -42,42 +55,53 @@ export function DeliveryTrackingPage() {
   const [tx, setTx] = useState<Transaction | null>(null);
   const [job, setJob] = useState<LogisticsJob | null>(null);
   const [allDeliverables, setAllDeliverables] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!session) return;
     let isMounted = true;
 
     async function loadData() {
-      let txns: Transaction[] = [];
-      if (session?.role === 'buyer') {
-        txns = transactionService.getForBuyer(session.userId);
-      } else if (session?.role === 'supplier') {
-        txns = transactionService.getForSupplier(session.userId);
-      } else if (session?.role === 'logistics') {
-        const myJobs = logisticsService.getForProvider(session.userId);
-        const jobTxnIds = myJobs.map((j) => j.transactionId);
-        txns = transactionService.getAll().filter((t) => jobTxnIds.includes(t.id));
-        if (txns.length === 0) {
-          txns = transactionService.getAll();
+      setLoading(true);
+      try {
+        let allTxns: Transaction[] = [];
+        if (session?.role === 'buyer') {
+          allTxns = transactionService.getForBuyer(session.userId);
+        } else if (session?.role === 'supplier') {
+          allTxns = transactionService.getForSupplier(session.userId);
+        } else if (session?.role === 'logistics') {
+          const myJobs = logisticsService.getForProvider(session.userId);
+          const jobTxnIds = myJobs.map((j) => j.transactionId);
+          allTxns = transactionService.getAll().filter((t) => jobTxnIds.includes(t.id));
+          if (allTxns.length === 0) {
+            allTxns = transactionService.getAll();
+          }
+        } else {
+          allTxns = transactionService.getAll();
         }
-      } else {
-        txns = transactionService.getAll();
-      }
 
-      if (isMounted) {
-        setAllDeliverables(txns);
-      }
+        const validDeliverables = allTxns.filter((t) => DELIVERY_ACTIVE_STATUSES.includes(t.status));
 
-      const targetId = id || txns[0]?.id;
-      if (targetId) {
-        const t = await transactionService.fetchById(targetId);
-        if (isMounted && t) {
-          setTx(t);
-          const j =
-            logisticsService.getForTransaction(t.id) ||
-            (t.logisticsJobId ? logisticsService.getById(t.logisticsJobId) : null);
-          setJob(j);
+        if (isMounted) {
+          setAllDeliverables(validDeliverables);
         }
+
+        const targetId = id || validDeliverables[0]?.id;
+        if (targetId) {
+          const t = await transactionService.fetchById(targetId);
+          if (isMounted && t) {
+            setTx(t);
+            const j =
+              logisticsService.getForTransaction(t.id) ||
+              (t.logisticsJobId ? logisticsService.getById(t.logisticsJobId) : null);
+            setJob(j);
+          }
+        } else if (isMounted) {
+          setTx(null);
+          setJob(null);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
       }
     }
 
@@ -87,6 +111,7 @@ export function DeliveryTrackingPage() {
     };
   }, [id, session]);
 
+  const hasDelivery = tx !== null && DELIVERY_ACTIVE_STATUSES.includes(tx.status);
   const progress = tx ? STATUS_PROGRESS[tx.status] ?? 50 : 50;
   const isCompleted = tx?.status === 'COMPLETED';
   const isDelivered = tx?.status === 'DELIVERED' || tx?.status === 'BUYER_CONFIRMATION_PENDING';
@@ -94,6 +119,46 @@ export function DeliveryTrackingPage() {
     job?.providerName ||
     tx?.history?.find((h) => h.actorRole === 'logistics')?.actor ||
     'SwiftHaul Logistics';
+
+  if (!loading && (!hasDelivery || allDeliverables.length === 0)) {
+    return (
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <Link
+            to="/app/dashboard"
+            className="text-xs font-medium text-gray-500 hover:text-gray-900 inline-flex items-center gap-1"
+          >
+            ← Back to Dashboard
+          </Link>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center shadow-xs">
+          <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
+            <Truck className="w-7 h-7" />
+          </div>
+          <h2 className="text-lg font-bold text-gray-900 mb-1">No Active Deliveries at the Moment</h2>
+          <p className="text-xs text-gray-500 max-w-md mx-auto mb-6 leading-relaxed">
+            There are currently no consignments in transit or scheduled for delivery. The live tracking map will appear here once an accepted trade order is dispatched by the logistics carrier.
+          </p>
+          <div className="flex justify-center gap-3">
+            <Link
+              to="/app/transactions"
+              className="px-4 py-2 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-xs"
+            >
+              View Active Orders
+            </Link>
+            <Link
+              to="/app/dashboard"
+              className="px-4 py-2 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors"
+            >
+              Go to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -264,8 +329,9 @@ export function DeliveryTrackingPage() {
               <div className="flex justify-between py-1">
                 <span className="text-gray-500">Payment Escrow</span>
                 <span className="font-semibold text-emerald-700">
-                  {isCompleted ? 'Escrow Released' : 'Secured in Soroban'}
+                  {isCompleted ? 'Escrow Released' : 'Secured in Escrow'}
                 </span>
+
               </div>
             </div>
           </div>

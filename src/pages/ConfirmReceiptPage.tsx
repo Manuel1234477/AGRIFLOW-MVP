@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { AlertTriangle, CheckCircle2, ExternalLink, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+
 import { useApp } from '../context/AppContext';
 import { useToast } from '../components/ui/Toast';
-import { FreighterBanner } from '../components/ui/FreighterBanner';
 import { transactionService } from '../services/transactionService';
 import { logisticsService } from '../services/logisticsService';
 import { formatCommodity, formatCurrency } from '../utils/format';
@@ -12,8 +12,8 @@ import {
   connectWallet,
   getWalletKey,
   releaseEscrowOnChain,
-  stellarExpertLink,
 } from '../lib/stellar';
+
 
 export function ConfirmReceiptPage() {
   const { id } = useParams<{ id: string }>();
@@ -97,8 +97,6 @@ export function ConfirmReceiptPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      <FreighterBanner />
-
       {releaseError && (
         <div className="flex items-start gap-3 px-4 py-3 rounded-xl border bg-red-50 border-red-200 text-red-900">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -147,10 +145,11 @@ export function ConfirmReceiptPage() {
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-3.5 text-xs text-gray-700 flex items-start gap-2">
         <span className="text-gray-900 font-bold">ℹ</span>
         <span>
-          Confirming receipt releases USDC funds to the supplier and logistics provider from the Soroban escrow contract and closes this transaction.
+          Confirming receipt releases funds to the supplier and logistics provider from the escrow contract and closes this transaction.
           Check the goods before you confirm.
         </span>
       </div>
+
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Left Column: What was delivered & Checklist */}
@@ -262,20 +261,20 @@ export function ConfirmReceiptPage() {
 
             <div className="space-y-2 text-xs">
               <div className="flex justify-between text-gray-600">
-                <span>Held in Soroban escrow</span>
-                <span className="font-medium text-gray-900">{formatCurrency(tx ? tx.totalAmount + Math.round(tx.totalAmount * 0.03) : 0, tx?.currency)} (USDC)</span>
+                <span>Held in escrow</span>
+                <span className="font-medium text-gray-900">{formatCurrency(tx ? tx.totalAmount + Math.round(tx.totalAmount * 0.03) : 0, tx?.currency)}</span>
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>Released to supplier</span>
-                <span className="font-medium text-gray-900">{formatCurrency(tx ? tx.totalAmount : 0, tx?.currency)} (USDC)</span>
+                <span className="font-medium text-gray-900">{formatCurrency(tx ? tx.totalAmount : 0, tx?.currency)}</span>
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>Released to logistics</span>
-                <span className="font-medium text-gray-900">{formatCurrency(tx ? Math.round(tx.totalAmount * 0.03) : 0, tx?.currency)} (USDC)</span>
+                <span className="font-medium text-gray-900">{formatCurrency(tx ? Math.round(tx.totalAmount * 0.03) : 0, tx?.currency)}</span>
               </div>
               <div className="flex justify-between text-sm font-bold text-gray-900 pt-3 border-t border-gray-100">
                 <span>Total released</span>
-                <span>{formatCurrency(tx ? tx.totalAmount + Math.round(tx.totalAmount * 0.03) : 0, tx?.currency)} (USDC)</span>
+                <span>{formatCurrency(tx ? tx.totalAmount + Math.round(tx.totalAmount * 0.03) : 0, tx?.currency)}</span>
               </div>
             </div>
 
@@ -297,16 +296,6 @@ export function ConfirmReceiptPage() {
                   'Confirm receipt & Release Escrow'
                 )}
               </button>
-              {releaseTxHash && (
-                <a
-                  href={stellarExpertLink(releaseTxHash)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block text-center text-xs text-blue-600 underline mt-2"
-                >
-                  View release on Stellar Expert ↗
-                </a>
-              )}
               <button
                 type="button"
                 onClick={handleReportIssue}
@@ -332,16 +321,8 @@ export function ConfirmReceiptPage() {
         <div className="flex items-start gap-3 px-4 py-3 rounded-xl border bg-green-50 border-green-200 text-green-900">
           <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
           <div className="text-xs">
-            <p className="font-semibold">Escrow released on Stellar Testnet</p>
-            <a
-              href={stellarExpertLink(releaseTxHash)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-green-800 underline underline-offset-2 break-all font-mono"
-            >
-              {stellarExpertLink(releaseTxHash)}
-              <ExternalLink className="w-3 h-3 shrink-0" />
-            </a>
+            <p className="font-semibold">Escrow Released on Chain</p>
+            <p className="font-mono text-green-800 break-all">{releaseTxHash}</p>
           </div>
         </div>
       )}

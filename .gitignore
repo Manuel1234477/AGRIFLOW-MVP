@@ -16,6 +16,11 @@ dist-ssr
 !.env.example
 target/
 contracts/target/
+cache/
+contracts/evm/cache/
+contracts/evm/out/
+out/
+broadcast/
 
 # Editor directories and files
 .vscode/*

@@ -15,8 +15,8 @@ import { useToast } from '../components/ui/Toast';
 import { supplyService } from '../services/supplyService';
 import { ListingMediaViewer } from '../components/ui/ListingMediaViewer';
 import { formatCurrency, formatDate, formatDateTime, formatCommodity, COMMODITY_ICONS } from '../utils/format';
-import { CONTRACT_ID } from '../lib/stellar';
 import type { Transaction, TransactionStatus, Payment, LogisticsJob, AuditEvent, SupplyListing } from '../types';
+
 
 function statusPill(status: string): string {
   const map: Record<string, string> = {
@@ -247,18 +247,9 @@ export function TransactionDetailPage() {
           <div className="flex flex-wrap items-center gap-3 mb-1">
             <h1 className="text-xl font-bold text-gray-900 font-mono">{txn.id}</h1>
             <span className={statusPill(txn.status)}>{txn.status.replace(/_/g, ' ')}</span>
-            {CONTRACT_ID && (
-              <a
-                href={`https://stellar.expert/explorer/testnet/contract/${CONTRACT_ID}`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-blue-600 underline"
-              >
-                Escrow on Stellar Expert ↗
-              </a>
-            )}
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-500">
+
             <span className="text-2xl">{COMMODITY_ICONS[txn.commodity]}</span>
             <span className="font-medium text-gray-800">{formatCommodity(txn.commodity)}</span>
             <span>·</span>

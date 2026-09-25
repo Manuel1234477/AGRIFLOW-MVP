@@ -30,25 +30,25 @@ export function WithdrawEarningsModal({
 }: Props) {
   const { toast } = useToast();
   const { rate: usdcRate } = useUsdcNgnRate();
-  const [method, setMethod] = useState<'bank_transfer' | 'stellar_usdc'>('bank_transfer');
+  const [method, setMethod] = useState<'bank_transfer' | 'crypto_usdc'>('bank_transfer');
   const [amount, setAmount] = useState<string>(summary.available > 0 ? String(summary.available) : '');
   const [bankName, setBankName] = useState('First Bank of Nigeria');
   const [accountNumber, setAccountNumber] = useState('3084920194');
   const [accountName, setAccountName] = useState(userName);
-  const [stellarAddress, setStellarAddress] = useState('');
+  const [walletAddress, setWalletAddress] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const numAmount = parseFloat(amount) || 0;
   const usdcEquivalent = (numAmount / usdcRate).toFixed(2);
 
-  const handleConnectStellar = async () => {
+  const handleConnectWallet = async () => {
     try {
       let key = await getWalletKey();
       if (!key) key = await connectWallet();
-      if (key) setStellarAddress(key);
+      if (key) setWalletAddress(key);
     } catch (e: any) {
-      toast('error', e.message || 'Could not connect Freighter.');
+      toast('error', e.message || 'Could not connect wallet.');
     }
   };
 
@@ -72,8 +72,8 @@ export function WithdrawEarningsModal({
         return;
       }
     } else {
-      if (!stellarAddress) {
-        setError('Please provide or connect your Stellar USDC wallet address.');
+      if (!walletAddress) {
+        setError('Please provide or connect your USDC wallet address.');
         return;
       }
     }
@@ -90,19 +90,20 @@ export function WithdrawEarningsModal({
           method === 'bank_transfer'
             ? { bankName, accountNumber, accountName }
             : undefined,
-        stellarPublicKey: method === 'stellar_usdc' ? stellarAddress : undefined,
+        walletAddress: method === 'crypto_usdc' ? walletAddress : undefined,
       });
 
       toast(
         'success',
         `Payout of ${formatCurrency(numAmount)} disbursed via ${
-          method === 'bank_transfer' ? 'Bank Transfer' : 'Stellar USDC'
+          method === 'bank_transfer' ? 'Bank Transfer' : 'Crypto USDC'
         }!`
       );
       onSuccess();
       onClose();
     } catch (err: any) {
       setError(err.message || 'Withdrawal failed. Please try again.');
+
     } finally {
       setLoading(false);
     }
@@ -158,17 +159,17 @@ export function WithdrawEarningsModal({
 
             <button
               type="button"
-              onClick={() => setMethod('stellar_usdc')}
+              onClick={() => setMethod('crypto_usdc')}
               className={`p-3 rounded-lg border flex items-center gap-2.5 transition-all text-left ${
-                method === 'stellar_usdc'
+                method === 'crypto_usdc'
                   ? 'border-agri-600 bg-agri-50/50 text-agri-900 ring-1 ring-agri-600'
                   : 'border-gray-200 hover:bg-gray-50 text-gray-700'
               }`}
             >
               <Coins className="w-4 h-4 text-agri-700 shrink-0" />
               <div>
-                <div className="font-semibold text-xs">Stellar USDC</div>
-                <div className="text-[10px] text-gray-500">Instant to Freighter wallet</div>
+                <div className="font-semibold text-xs">Crypto USDC</div>
+                <div className="text-[10px] text-gray-500">Instant to USDC wallet</div>
               </div>
             </button>
           </div>
@@ -247,23 +248,24 @@ export function WithdrawEarningsModal({
         ) : (
           <div className="space-y-2.5 bg-gray-50 p-3.5 rounded-lg border border-gray-200">
             <div className="flex items-center justify-between">
-              <label className="text-[11px] font-medium text-gray-600">Stellar Public Key</label>
+              <label className="text-[11px] font-medium text-gray-600">USDC Wallet Address</label>
               <button
                 type="button"
-                onClick={handleConnectStellar}
+                onClick={handleConnectWallet}
                 className="text-[11px] text-blue-600 font-semibold hover:underline"
               >
-                Auto-fill from Freighter
+                Auto-fill Wallet
               </button>
             </div>
             <Input
-              value={stellarAddress}
-              onChange={(e) => setStellarAddress(e.target.value)}
-              placeholder="G..."
+              value={walletAddress}
+              onChange={(e) => setWalletAddress(e.target.value)}
+              placeholder="0x... or wallet address"
               required
             />
           </div>
         )}
+
 
         {/* Action Buttons */}
         <div className="pt-2 flex gap-2">

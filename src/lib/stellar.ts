@@ -148,7 +148,7 @@ export async function invokeContract(
     const detail = 'errorResult' in sendResponse ? String(sendResponse.errorResult) : '';
     throw new Error(
       `Transaction submission failed. Hash: ${sendResponse.hash}.` +
-        (detail ? ` Result XDR: ${detail}` : ' See Freighter / Soroban RPC error logs for details.'),
+        (detail ? ` Result XDR: ${detail}` : ' See RPC error logs for details.'),
     );
   }
 
@@ -169,12 +169,12 @@ async function pollTransactionStatus(
       return hash;
     }
     if (result.status === rpc.Api.GetTransactionStatus.FAILED) {
-      throw new Error(`Transaction failed on-chain. ${stellarExpertLink(hash)}`);
+      throw new Error(`Transaction failed on-chain: ${hash}`);
     }
   }
 
   throw new Error(
-    `Transaction did not finalize within ${maxAttempts} polling attempts. ${stellarExpertLink(hash)}`,
+    `Transaction did not finalize within ${maxAttempts} polling attempts. Ref: ${hash}`,
   );
 }
 

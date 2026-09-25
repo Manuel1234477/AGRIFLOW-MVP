@@ -196,11 +196,12 @@ export function DemandsPage() {
                       </button>
                     )}
                     <Link
-                      to={`/app/demands/${d.id}`}
+                      to={`/app/matches/${d.id}`}
                       className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-300 rounded-lg transition-colors"
                     >
-                      View
+                      View Matches
                     </Link>
+
                   </div>
                 </div>
 

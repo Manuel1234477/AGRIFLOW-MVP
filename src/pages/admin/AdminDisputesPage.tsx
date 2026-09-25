@@ -8,8 +8,8 @@ import { Loader2 } from 'lucide-react';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { formatDateTime } from '../../utils/format';
 import { invokeContract, txIdToScVal, getWalletKey } from '../../lib/stellar';
-import { FreighterBanner } from '../../components/ui/FreighterBanner';
 import type { Dispute, Transaction } from '../../types';
+
 
 export function AdminDisputesPage() {
   const { session, refreshNotifications } = useApp();
@@ -46,7 +46,7 @@ export function AdminDisputesPage() {
       // If dispute is upheld (cancelled), refund buyer on-chain
       if (resolution.outcome === 'cancelled') {
         const pubKey = await getWalletKey();
-        if (!pubKey) throw new Error('Connect Freighter wallet as admin to authorize refund');
+        if (!pubKey) throw new Error('Connect admin wallet to authorize refund');
         const txIdVal = await txIdToScVal(resolving.transactionId);
         const hash = await invokeContract('refund', [txIdVal], pubKey);
         toast('info', `On-chain refund submitted: ${hash.slice(0, 10)}...`);
@@ -77,9 +77,8 @@ export function AdminDisputesPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
-      <FreighterBanner />
-
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Disputes ({disputes.length})</h1>
+
 
       {sorted.length === 0 ? (
         <EmptyState icon={<AlertTriangle className="w-7 h-7" />} title="No disputes" description="All transactions are proceeding smoothly." />
@@ -158,8 +157,9 @@ export function AdminDisputesPage() {
                 onChange={(e) => setResolution((r) => ({ ...r, outcome: e.target.value as any }))}
               >
                 <option value="completed">Complete Transaction (goods accepted)</option>
-                <option value="cancelled">Cancel Transaction (dispute upheld — refund buyer on Stellar)</option>
+                <option value="cancelled">Cancel Transaction (dispute upheld — refund buyer)</option>
               </select>
+
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setResolving(null)} className="px-3 py-2 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors">Cancel</button>

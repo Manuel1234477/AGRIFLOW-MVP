@@ -1,10 +1,14 @@
 # AgriFlow Smart Contracts — Engineering Backlog & GitHub Issues
 
 **Target Repository:** `reactjay/AGRIFLOW-MVP`  
-**Team Allocation:**
-- 🔨 **Contract Developer:** Chibuike
-- 🧪 **Test & QA Engineer:** Kennedy
-- 🔍 **Security Auditor & Lead:** Japheth
+**Network:** Ethereum Sepolia (Chain ID: `11155111`)
+
+### 🚀 Live Deployments & Verification
+- **AgriFlowGasMaster:** [`0x77f8D3Ac14de4883B5Da736bF9086902B5A1A4dB`](https://sepolia.etherscan.io/address/0x77f8D3Ac14de4883B5Da736bF9086902B5A1A4dB)
+- **AgriFlowEscrow:** [`0x9E93B3ffF884b736fECEACa33d93f33aAfDdc6C5`](https://sepolia.etherscan.io/address/0x9E93B3ffF884b736fECEACa33d93f33aAfDdc6C5)
+- **Treasury / Owner:** `0x41648dE45Cc4D0172beCd4Db0A0A0b459C383705`
+- **Relayer:** `0x41648dE45Cc4D0172beCd4Db0A0A0b459C383705`
+- **Test Suite Status:** `11/11 tests passed` (Foundry)
 
 ---
 

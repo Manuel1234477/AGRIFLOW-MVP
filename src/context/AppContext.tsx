@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import type { AuthSession, Notification, UserRole } from '../types';
 import { authService } from '../services/authService';
 import { notificationService } from '../services/notificationService';
+import { seedInitialLocalDataIfEmpty } from '../services/seedService';
 
 interface RegisterParams {
   name: string;
@@ -30,7 +31,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [session, setSessionState] = useState<AuthSession | null>(() => authService.getSession());
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // Validate token and sync live session on mount
+  // Seed default data if local storage is empty
+  useEffect(() => {
+    seedInitialLocalDataIfEmpty();
+  }, []);
+
+  // Validate token and sync live session on mount without logging out offline users
   useEffect(() => {
     authService.fetchMe().then((user) => {
       if (user) {
@@ -41,8 +47,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           email: user.email,
         });
       }
+    }).catch(() => {
+      // Keep existing storage session if offline
     });
   }, []);
+
 
   const refreshNotifications = useCallback(() => {
     if (session) {

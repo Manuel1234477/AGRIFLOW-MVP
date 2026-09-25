@@ -39,10 +39,11 @@ export function SupplyManagePage() {
       const newStatus = current === 'active' ? 'inactive' : 'active';
       await supplyService.setStatus(listingId, session.userId, newStatus as any);
       toast('success', `Listing ${newStatus === 'active' ? 'activated' : 'deactivated'}.`);
-      window.location.reload();
+      setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, status: newStatus as any } : l)));
     } catch (e: any) { toast('error', e.message); }
     finally { setToggling(null); }
   };
+
 
   const active = listings.filter(l => l.status === 'active').length;
   const inactive = listings.filter(l => l.status !== 'active').length;

@@ -5,10 +5,11 @@ import { useToast } from '../components/ui/Toast';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 
 const LEFT_FEATURES = [
-  'Payments protected by Stellar smart-contract escrow.',
+  'Payments protected by smart-contract escrow.',
   'Verified supply-demand matching in under 18 hours.',
   'Full visibility for every party, from farm to delivery.',
 ];
+
 
 function AuthLeftPanel() {
   return (

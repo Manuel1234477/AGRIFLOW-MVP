@@ -48,15 +48,20 @@ export function MediaUploader({
   };
 
   // Poll items the server is still processing until they're ready/failed,
-  // so a rejected file is flagged before the listing is published.
+  // so a rejected file is flagged before the listing is published. A round
+  // where nothing finished leaves `media` unchanged, so `pollTick` is what
+  // schedules the next one -- without it polling stops after one check and
+  // a slow video stays "Processing" forever.
+  const [pollTick, setPollTick] = useState(0);
   useEffect(() => {
     const processing = media.filter((m) => m.status === 'processing');
     if (processing.length === 0) return;
+    let cancelled = false;
     const timer = setTimeout(async () => {
       for (const item of processing) {
         try {
           const fresh = await mediaService.get(item.id);
-          if (fresh.status !== 'processing') {
+          if (!cancelled && fresh.status !== 'processing') {
             // Keep the local preview; the server URL may not be cached yet.
             patchItem(item.id, { status: fresh.status, processingError: fresh.processingError });
           }
@@ -64,9 +69,13 @@ export function MediaUploader({
           // Transient -- try again on the next tick.
         }
       }
+      if (!cancelled) setPollTick((t) => t + 1);
     }, 2000);
-    return () => clearTimeout(timer);
-  }, [media]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [media, pollTick]);
 
   const startUpload = async (localId: string, file: File) => {
     try {

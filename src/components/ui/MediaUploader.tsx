@@ -34,10 +34,17 @@ export function MediaUploader({
 
   // Uploads finish asynchronously, after the `media` prop captured by the
   // closure that started them is stale -- always patch the latest list.
+  // Several patches can land before the parent re-renders (two uploads
+  // finishing, a poll result), so each one advances the ref itself;
+  // otherwise the later patch is built on the old list and drops the first.
   const mediaRef = useRef(media);
   mediaRef.current = media;
+  const commit = (next: ListingMedia[]) => {
+    mediaRef.current = next;
+    onChange(next);
+  };
   const patchItem = (id: string, patch: Partial<ListingMedia>) => {
-    onChange(mediaRef.current.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+    commit(mediaRef.current.map((m) => (m.id === id ? { ...m, ...patch } : m)));
   };
 
   // Poll items the server is still processing until they're ready/failed,
@@ -74,6 +81,7 @@ export function MediaUploader({
         status: saved.status,
         progress: 1,
         processingError: saved.processingError,
+        isCover: saved.isCover,
       });
     } catch (e) {
       patchItem(localId, {
@@ -128,16 +136,15 @@ export function MediaUploader({
     });
 
     if (newItems.length > 0) {
-      onChange([...media, ...newItems]);
-      mediaRef.current = [...media, ...newItems];
+      commit([...mediaRef.current, ...newItems]);
       queued.forEach(([localId, file]) => startUpload(localId, file));
     }
   };
 
   const handleRemove = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const item = media.find((m) => m.id === id);
-    onChange(media.filter((m) => m.id !== id));
+    const item = mediaRef.current.find((m) => m.id === id);
+    commit(mediaRef.current.filter((m) => m.id !== id));
     if (selectedPreview?.id === id) {
       setSelectedPreview(null);
     }
@@ -150,7 +157,23 @@ export function MediaUploader({
     }
   };
 
-  const coverIndex = media.findIndex((m) => m.type === 'image' && m.status !== 'failed');
+  // The server's cover when it has one; otherwise the first uploaded photo,
+  // which is the one the server picks (on create, or when the cover is
+  // removed from an existing listing).
+  const canBeCover = (m: ListingMedia) => m.type === 'image' && (m.status === 'processing' || m.status === 'ready');
+  const explicitCover = media.findIndex((m) => m.isCover);
+  const coverIndex = explicitCover >= 0 ? explicitCover : media.findIndex(canBeCover);
+
+  const handleSetCover = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setError(null);
+    try {
+      await mediaService.update(id, { isCover: true });
+      commit(mediaRef.current.map((m) => ({ ...m, isCover: m.id === id })));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not set the cover photo.');
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -283,11 +306,20 @@ export function MediaUploader({
                     </div>
                   )}
 
-                  {/* Primary Badge: the server makes the first uploaded photo the cover */}
                   {index === coverIndex && (
                     <span className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-emerald-600/90 text-white text-[9px] font-bold uppercase tracking-wider">
                       Primary Cover
                     </span>
+                  )}
+                  {/* Only attached media can be the cover, so only on an existing listing */}
+                  {listingId && index !== coverIndex && canBeCover(item) && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleSetCover(item.id, e)}
+                      className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-black/70 hover:bg-emerald-600 text-white text-[9px] font-bold uppercase tracking-wider sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity cursor-pointer"
+                    >
+                      Set as cover
+                    </button>
                   )}
 
                   {/* Remove Button */}

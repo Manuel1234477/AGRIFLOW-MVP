@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Package, Power } from 'lucide-react';
+import { Plus, Package, Power, Images, ChevronDown } from 'lucide-react';
 import { supplyService } from '../services/supplyService';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../components/ui/Toast';
+import { MediaUploader } from '../components/ui/MediaUploader';
 import { formatCurrency, formatDate, formatCommodity, COMMODITY_ICONS } from '../utils/format';
-import type { SupplyListing } from '../types';
+import type { SupplyListing, ListingMedia } from '../types';
 
 export function SupplyManagePage() {
   const { session } = useApp();
@@ -14,6 +15,8 @@ export function SupplyManagePage() {
   const [toggling, setToggling] = useState<string | null>(null);
   const [listings, setListings] = useState<SupplyListing[]>([]);
   const [_loading, setLoading] = useState(true);
+  // Listing whose photos & videos panel is open (one at a time).
+  const [mediaOpen, setMediaOpen] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session) return;
@@ -43,6 +46,11 @@ export function SupplyManagePage() {
     } catch (e: any) { toast('error', e.message); }
     finally { setToggling(null); }
   };
+
+  // Uploads, removals and cover changes are saved by MediaUploader as they
+  // happen; this only keeps the card's list in step.
+  const setListingMedia = (listingId: string, media: ListingMedia[]) =>
+    setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, media } : l)));
 
 
   const active = listings.filter(l => l.status === 'active').length;
@@ -134,8 +142,30 @@ export function SupplyManagePage() {
                   </div>
                 </div>
 
-                <div className="text-xs text-gray-400 mt-2.5">{l.location}</div>
+                <div className="flex items-center justify-between gap-3 mt-2.5">
+                  <div className="text-xs text-gray-400">{l.location}</div>
+                  <button
+                    type="button"
+                    onClick={() => setMediaOpen(mediaOpen === l.id ? null : l.id)}
+                    aria-expanded={mediaOpen === l.id}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors shrink-0"
+                  >
+                    <Images size={12} />
+                    Photos &amp; videos ({l.media?.length ?? 0})
+                    <ChevronDown size={12} className={`transition-transform ${mediaOpen === l.id ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
               </div>
+
+              {mediaOpen === l.id && (
+                <div className="border-t border-gray-100 p-5">
+                  <MediaUploader
+                    listingId={l.id}
+                    media={l.media ?? []}
+                    onChange={(media) => setListingMedia(l.id, media)}
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>
